@@ -1,0 +1,278 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ CORE ENTITIES ============
+
+model Action {
+  id              Int             @id @default(autoincrement())
+
+  // Core fields
+  description     String
+  suggestedAction String?
+
+  // Classification
+  container       Container       @default(CANDIDATES)
+  urgency         Urgency         @default(MEDIUM)
+  confidence      Float           @default(0.5)
+
+  // Dates
+  dueDate         DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  completedAt     DateTime?
+  archivedAt      DateTime?
+
+  // AI Processing
+  rawInput        String
+  parseVersion    Int             @default(1)
+  aiReasoning     String?
+  recurrenceRule  String?         // e.g. YEARLY_11, MONTHLY, WEEKLY, EVERY_6_MONTHS
+
+  // Concurrency control
+  version         Int             @default(0)
+
+  // Relationships
+  sourceId        Int
+  source          Source          @relation(fields: [sourceId], references: [id])
+  triggers        Trigger[]
+  events          ActionEvent[]
+  parties         Party[]         @relation("ActionParties")
+
+  // Grouping
+  groupId         Int?
+  group           ActionGroup?    @relation(fields: [groupId], references: [id])
+
+  @@index([container])
+  @@index([urgency])
+  @@index([createdAt])
+  @@map("actions")
+}
+
+enum Container {
+  ACTIONABLE_NOW
+  CANDIDATES
+  AMBIGUITY
+  WAITING
+  TUNING
+}
+
+enum Urgency {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+model ActionGroup {
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String?
+  actions     Action[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("action_groups")
+}
+
+// ============ SOURCE TRACKING ============
+
+model Source {
+  id          Int         @id @default(autoincrement())
+  type        SourceType
+
+  // For email sources
+  emailId     String?     @unique
+  emailFrom   String?
+  emailSubject String?
+  emailDate   DateTime?
+
+  // For Siri sources
+  siriText    String?
+  siriDate    DateTime?
+
+  // For manual sources
+  manualNote  String?
+
+  actions     Action[]
+  createdAt   DateTime    @default(now())
+
+  @@map("sources")
+}
+
+enum SourceType {
+  GMAIL
+  SIRI
+  MANUAL
+}
+
+// ============ PARTIES ============
+
+model Party {
+  id        Int       @id @default(autoincrement())
+  name      String
+  email     String?   @unique
+  phone     String?
+  actions   Action[]  @relation("ActionParties")
+  createdAt DateTime  @default(now())
+
+  @@map("parties")
+}
+
+// ============ TRIGGERS ============
+
+model Trigger {
+  id              Int           @id @default(autoincrement())
+  actionId        Int
+  action          Action        @relation(fields: [actionId], references: [id], onDelete: Cascade)
+
+  type            TriggerType
+  description     String?
+
+  // Date triggers
+  triggerDate     DateTime?
+  dateWindowStart DateTime?
+  dateWindowEnd   DateTime?
+
+  // Event triggers
+  eventDescription String?
+  emailPattern     String?
+
+  // Web condition triggers
+  webQuery        String?   // Natural language condition to check via web search
+  webCheckResult  String?   // Last check result/reasoning
+
+  // Check status
+  lastChecked     DateTime?
+  checkCount      Int           @default(0)
+  failedChecks    Int           @default(0)
+  isTriggered     Boolean       @default(false)
+  triggeredAt     DateTime?
+
+  createdAt       DateTime      @default(now())
+
+  @@index([actionId])
+  @@index([type, isTriggered])
+  @@map("triggers")
+}
+
+enum TriggerType {
+  DATE_EXACT
+  DATE_WINDOW
+  EMAIL_REPLY
+  MANUAL_CHECK
+  WEB_CONDITION
+}
+
+// ============ EVENT LOG ============
+
+model ActionEvent {
+  id            Int         @id @default(autoincrement())
+  actionId      Int
+  action        Action      @relation(fields: [actionId], references: [id], onDelete: Cascade)
+
+  type          EventType
+  fromContainer Container?
+  toContainer   Container?
+  details       String?
+
+  createdAt     DateTime    @default(now())
+
+  @@index([actionId])
+  @@map("action_events")
+}
+
+enum EventType {
+  CREATED
+  CONTAINER_CHANGE
+  EDITED
+  MERGED
+  TRIGGER_FIRED
+  AI_REPARSED
+  COMPLETED
+  ARCHIVED
+  FOLLOW_UP_SENT
+}
+
+// ============ TUNING ============
+
+model TuningRule {
+  id              Int           @id @default(autoincrement())
+
+  description     String
+  category        String
+  condition       String
+  transformation  String
+
+  status          TuningStatus  @default(SHADOW)
+  shadowCount     Int           @default(0)
+  shadowSuccesses Int           @default(0)
+  shadowThreshold Int           @default(5)
+
+  userFeedback    String?
+
+  createdAt       DateTime      @default(now())
+  activatedAt     DateTime?
+  rejectedAt      DateTime?
+
+  @@map("tuning_rules")
+}
+
+enum TuningStatus {
+  SHADOW
+  PROPOSED
+  ACTIVE
+  REJECTED
+}
+
+// ============ SYSTEM STATUS ============
+
+model ScanStatus {
+  id              Int         @id @default(autoincrement())
+  sourceType      SourceType  @unique
+  lastScanAt      DateTime?
+  lastSuccessAt   DateTime?
+  lastError       String?
+  itemsScanned    Int         @default(0)
+  actionsCreated  Int         @default(0)
+  consecutiveFailures Int     @default(0)
+
+  @@map("scan_status")
+}
+
+model SystemSetting {
+  key       String    @id
+  value     String
+  updatedAt DateTime  @updatedAt
+
+  @@map("system_settings")
+}
+
+// Push notification subscriptions
+model PushSubscription {
+  id        Int      @id @default(autoincrement())
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@map("push_subscriptions")
+}
+
+// Gmail OAuth tokens
+model GmailAuth {
+  id            Int       @id @default(autoincrement())
+  accessToken   String
+  refreshToken  String
+  expiresAt     DateTime
+  scope         String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("gmail_auth")
+}
