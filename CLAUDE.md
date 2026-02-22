@@ -118,3 +118,54 @@ These were observed during initial Gmail scan triage. Each should eventually bec
 15. **Tuning rule cards don't expand / no delete access** — Items in the Tuning page don't open a detail view, so there's no way to access the ⋯ menu or delete them from the UI. Need either an expand/detail view or inline delete on tuning rule cards.
 13. **TUNING should be a flag, not a container** — Currently TUNING is a Container enum value, so flagging an action for AI feedback removes it from the user's active view. Correct fix: remove TUNING from the Container enum, add a boolean `isFlagged` field to Action, and apply the user's correction immediately (update urgency/container in place) while creating the tuning rule. The action stays visible and actionable. This is a schema change (migration required) and affects routes, frontend types, and ContainerNav.
 11. **Container badge stale after move** — After reclassifying an action, the nav badge counts take ~10 seconds to update. Should invalidate and refetch counts immediately after any container change. Need a multi-select mode on the feed (checkbox per card, select-all, then bulk Complete / Delete / Move). This is especially important for post-scan triage sessions.
+
+## v2 Punch List (approved for build)
+
+Priority order: schema → categorization → flags → UI → groups. Each item marked [ ] pending, [x] done.
+
+### Schema changes
+- [ ] P1: Remove TUNING from Container enum
+- [ ] P2: Add `needsClarification` Boolean to Action (default false)
+- [ ] P3: Add `needsTuning` Boolean to Action (default false)
+- [ ] P4: Add `commitmentConfidence` Float to Action (alongside existing `confidence` which becomes parseConfidence)
+- [ ] P5: Add `archivedAt` DateTime? to ActionGroup (for completed groups)
+- [ ] P6: Run db:push after all schema changes
+
+### Categorization / routing fixes
+- [ ] P7: Auto-route by due date: if dueDate >21 days out → WAITING + auto-create DATE_EXACT trigger (set triggerDate to 21 days before dueDate)
+- [ ] P8: Vague date resolution: "April" = April 1, "2027" = Jan 1, "Fall" = Sept 21, etc. — enforce in parser
+- [ ] P9: Enforce real triggerDate on all date triggers (no prose-only descriptions without computable date)
+- [ ] P10: Split confidence: AI returns commitmentConfidence + parseConfidence. Route/filter based on commitmentConfidence
+- [ ] P11: Manual input confirm → goes directly to AI-suggested container (not always CANDIDATES)
+- [ ] P12: Kill "no actionable commitment" bug: skip action creation in scanner if description matches or commitmentConfidence < 0.3
+- [ ] P13: Gmail thread deduplication: check for existing action with same threadId or similar description/sender before creating
+- [ ] P14: Ongoing dedup detection: when new action looks like existing one, flag with needsClarification and ask user
+
+### Clarify / Tuning flag migration
+- [ ] P15: Clarify = flag (needsClarification), not container. Action stays in NOW/WAITING. Clarify badge shows count of flagged actions
+- [ ] P16: Tuning = flag (needsTuning), not container. Action stays in its container. Tuning badge shows count of flagged actions
+- [ ] P17: Feedback on action: apply correction immediately (update urgency/container in place), set needsTuning=true, create tuning rule with action description as title
+- [ ] P18: WAITING safety net: scheduler checks for WAITING actions with no trigger or no triggerDate → set needsClarification=true
+
+### UI fixes
+- [ ] P19: Source attribution: show sender/subject/date inline on Gmail-sourced action cards + "View in Gmail" link in detail view
+- [ ] P20: Bulk actions: multi-select mode on feed (checkbox per card, select-all, bulk Complete/Delete/Move)
+- [ ] P21: Date pickers: replace all YYYY-MM-DD text inputs with native date pickers
+- [ ] P22: Feedback pickers: dropdown for urgency correction (4 values) and container correction (4 containers)
+- [ ] P23: Badge staleness: refetch container counts immediately after any container change (not 30s polling)
+- [ ] P24: Tuning rule titles: use action description instead of "Feedback on action #N"
+- [ ] P25: Tuning rule cards: expandable detail view + inline delete button
+- [ ] P26: Audit and fix inconsistent UI patterns (same action done multiple ways = bug)
+
+### Action Groups enhancements
+- [ ] P27: Accepted/manual groups at top, AI-suggested groups collapsed at bottom
+- [ ] P28: Group suggestions appear as Review items (cards in CANDIDATES)
+- [ ] P29: Add actions to group via searchable checklist modal
+- [ ] P30: Quick remove (X) on actions within a group
+- [ ] P31: Progress indicator per group ("3 of 6 complete")
+- [ ] P32: Completing all actions → archive group (set archivedAt, preserve history)
+
+### Tuning Option A (FUTURE — do not build now, hold for next session)
+- Behavioral learning: track reclassify/delete/urgency-change as learning signals
+- Pattern detection: aggregate signals, surface suggestions ("stop creating Nextdoor actions?")
+- Self-generating punch list: things tuning identifies but can't fix → exportable list for developer

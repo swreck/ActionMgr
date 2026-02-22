@@ -278,8 +278,29 @@ async function processEmail(email: EmailContent): Promise<ParsedAction | null> {
   // Parse with AI (applies active tuning rules, tracks shadow rules)
   const parsed = await parseWithTuning(textToAnalyze)
 
-  // If AI says no action, skip
-  if (parsed.confidence < 0.3 && parsed.missingInfo.includes('AI parsing failed')) {
+  // P12: Kill "no actionable commitment" bug — skip if AI says no real commitment
+  const isNonCommitment =
+    parsed.description.toLowerCase().includes('no actionable commitment') ||
+    parsed.confidence < 0.3
+  if (isNonCommitment) {
+    console.log(`Skipping non-commitment email: ${email.subject}`)
+    await prisma.source.create({
+      data: {
+        type: 'GMAIL',
+        emailId: email.id,
+        emailFrom: email.from,
+        emailSubject: email.subject,
+        emailDate: email.date
+      }
+    })
+    return null
+  }
+
+  // P13: Thread deduplication — skip if an action already exists from the same thread
+  const existingThreadAction = await findDuplicateAction(email, parsed.description)
+  if (existingThreadAction) {
+    console.log(`Skipping duplicate: similar to action #${existingThreadAction.id}`)
+    // Still record the source for dedup so we don't re-process this email
     await prisma.source.create({
       data: {
         type: 'GMAIL',
@@ -312,6 +333,7 @@ async function processEmail(email: EmailContent): Promise<ParsedAction | null> {
       container: parsed.container,
       urgency: parsed.urgency,
       confidence: parsed.confidence,
+      commitmentConfidence: parsed.commitmentConfidence ?? null,
       aiReasoning: parsed.reasoning,
       dueDate: parsed.dueDate ? new Date(parsed.dueDate) : null,
       sourceId: source.id
@@ -361,6 +383,68 @@ async function processEmail(email: EmailContent): Promise<ParsedAction | null> {
   })
 
   return parsed
+}
+
+/**
+ * Find an existing action that duplicates this email (same thread or very similar description from same sender).
+ * Returns the matching action if found, null otherwise.
+ */
+async function findDuplicateAction(email: EmailContent, newDescription: string): Promise<{ id: number } | null> {
+  // Normalize the subject to strip Re:/Fwd: prefixes for thread matching
+  const normalizedSubject = email.subject
+    .replace(/^(re|fwd?|fw):\s*/gi, '')
+    .trim()
+    .toLowerCase()
+
+  // Find existing sources from the same sender with similar subjects (same thread)
+  const candidateSources = await prisma.source.findMany({
+    where: {
+      type: 'GMAIL',
+      emailFrom: { contains: email.from.split('<').pop()?.replace('>', '').trim() || email.from },
+      actions: { some: { archivedAt: null } }
+    },
+    include: {
+      actions: {
+        where: { archivedAt: null },
+        select: { id: true, description: true }
+      }
+    }
+  })
+
+  for (const source of candidateSources) {
+    // Check 1: Same thread by normalized subject match
+    const existingSubjectNormalized = (source.emailSubject || '')
+      .replace(/^(re|fwd?|fw):\s*/gi, '')
+      .trim()
+      .toLowerCase()
+
+    if (normalizedSubject && existingSubjectNormalized === normalizedSubject) {
+      const action = source.actions[0]
+      if (action) return { id: action.id }
+    }
+
+    // Check 2: Word overlap >60% with same sender
+    for (const action of source.actions) {
+      if (descriptionWordOverlap(action.description, newDescription) > 0.6) {
+        return { id: action.id }
+      }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Calculate word overlap ratio between two descriptions.
+ * Returns a value between 0 and 1 representing the fraction of shared words.
+ */
+function descriptionWordOverlap(a: string, b: string): number {
+  const wordsA = new Set(a.toLowerCase().split(/\s+/).filter(w => w.length > 2))
+  const wordsB = new Set(b.toLowerCase().split(/\s+/).filter(w => w.length > 2))
+  if (wordsA.size === 0 || wordsB.size === 0) return 0
+  const intersection = [...wordsA].filter(w => wordsB.has(w))
+  const smaller = Math.min(wordsA.size, wordsB.size)
+  return intersection.length / smaller
 }
 
 /**

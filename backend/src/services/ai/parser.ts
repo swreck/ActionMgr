@@ -7,13 +7,16 @@ export interface ParsedAction {
   suggestedAction: string | null
   urgency: Urgency
   dueDate: string | null // ISO date string
-  confidence: number
+  confidence: number // Alias for commitmentConfidence (backward compat)
+  commitmentConfidence: number // 0-1: Is this actually something the user needs to act on?
+  parseConfidence: number // 0-1: Given it IS a commitment, how confident in the parsed fields?
   reasoning: string
   parties: Array<{ name: string; email?: string }>
   triggers: Array<{ type: string; description: string; webQuery?: string }>
   missingInfo: string[] // What info is needed for clarity
   container: Container
   recurrenceRule: string | null // e.g. YEARLY_11, MONTHLY, WEEKLY, EVERY_6_MONTHS
+  autoTrigger?: { type: string; triggerDate: string } // Auto-created for WAITING items with future dueDate
 }
 
 // Tool definition for structured extraction
@@ -44,11 +47,17 @@ const extractActionTool = {
         type: 'string',
         description: 'ISO date (YYYY-MM-DD) if a deadline is mentioned or implied'
       },
-      confidence: {
+      commitment_confidence: {
         type: 'number',
         minimum: 0,
         maximum: 1,
-        description: 'How confident you are in this extraction (0-1)'
+        description: 'How confident you are that this text represents a real actionable commitment the user needs to act on (0-1). Newsletter/marketing = 0.1, unsolicited asks = 0.2, vague mentions = 0.4, clear personal commitment = 0.9, explicit task with deadline = 0.95.'
+      },
+      parse_confidence: {
+        type: 'number',
+        minimum: 0,
+        maximum: 1,
+        description: 'Given that this IS a real commitment, how confident are you in the accuracy of the parsed fields (description, urgency, dueDate, parties, etc.)? High when all details are explicit in the text, lower when you had to infer or guess fields.'
       },
       reasoning: {
         type: 'string',
@@ -99,8 +108,13 @@ const extractActionTool = {
         description: 'Set only if the action explicitly repeats. Use one of: YEARLY (same date each year), YEARLY_MM (specific month, e.g. YEARLY_11 for every November), MONTHLY (every month), WEEKLY (every week), EVERY_6_MONTHS, EVERY_90_DAYS. Only set when recurrence is clearly stated; omit if unsure.'
       }
     },
-    required: ['hasAction', 'description', 'urgency', 'confidence', 'reasoning', 'missingInfo']
+    required: ['hasAction', 'description', 'urgency', 'commitment_confidence', 'parse_confidence', 'reasoning', 'missingInfo']
   }
+}
+
+// Helper to get day name from a Date
+function getDayName(date: Date): string {
+  return date.toLocaleDateString('en-US', { weekday: 'long' })
 }
 
 const SYSTEM_PROMPT = `You are an action extraction assistant for a personal task manager. Your job is to analyze text input and extract actionable commitments.
@@ -120,7 +134,11 @@ Guidelines:
    - If the condition depends on receiving an email reply, use EMAIL_REPLY
    - If it depends on a specific date, use DATE_EXACT or DATE_WINDOW
    - Only fall back to MANUAL_CHECK if no other trigger type fits
-7. Be honest about confidence - lower it when details are ambiguous
+7. Confidence scoring — you must return TWO separate confidence scores:
+   - commitment_confidence (0-1): How likely is this text a real actionable commitment the user personally needs to act on?
+     Examples: Newsletter/marketing email = 0.1, unsolicited donation request = 0.15, community broadcast = 0.1, vague "maybe I should..." = 0.3, someone asking user to do something = 0.7, user explicitly saying "I need to..." = 0.9, invoice with due date = 0.95.
+   - parse_confidence (0-1): Given it IS a real commitment, how confident are you in the specific parsed fields (description, urgency, dueDate, parties)?
+     High (0.9+) when all details are explicitly stated. Lower when you had to infer dates, guess urgency, or assume who's involved.
 8. List what information is missing if the action is unclear
 9. Detect recurrence patterns and set recurrenceRule:
    - "every year in November" or "annually in November" → YEARLY_11
@@ -130,8 +148,17 @@ Guidelines:
    - "every 6 months" or "twice a year" → EVERY_6_MONTHS
    - "every quarter" or "every 90 days" → EVERY_90_DAYS
    - Only set recurrenceRule when recurrence is explicitly stated
+10. Vague date resolution — when the user gives a vague time reference, resolve to the first day of that unit:
+   - "April" → April 1 of the current year (or next year if April has already passed)
+   - "2027" → January 1, 2027
+   - "Fall" → September 21 of the current year (or next year if already past)
+   - "Spring" → March 20, "Summer" → June 21, "Winter" → December 21
+   - "next week" → next Monday
+   - "this summer" → June 21 of the current year
+   - "end of year" → December 31 of the current year
+   Always return a specific date in the dueDate field when any time reference is given, even vague ones.
 
-Today's date is ${new Date().toISOString().split('T')[0]}.`
+Today is ${getDayName(new Date())}, ${new Date().toISOString().split('T')[0]}.`
 
 export async function parseActionText(text: string, activeRuleInstructions: string[] = []): Promise<ParsedAction> {
   try {
@@ -171,7 +198,8 @@ export async function parseActionText(text: string, activeRuleInstructions: stri
       suggestedAction?: string
       urgency: string
       dueDate?: string
-      confidence: number
+      commitment_confidence: number
+      parse_confidence: number
       reasoning: string
       parties?: Array<{ name: string; email?: string }>
       triggers?: Array<{ type: string; description: string; webQuery?: string }>
@@ -180,21 +208,49 @@ export async function parseActionText(text: string, activeRuleInstructions: stri
       recurrenceRule?: string
     }
 
+    const commitmentConfidence = result.commitment_confidence
+    const parseConfidence = result.parse_confidence
+
     // Determine container based on confidence and completeness
-    const container = determineContainer(result)
+    const container = determineContainer({
+      commitmentConfidence,
+      missingInfo: result.missingInfo || [],
+      isWaiting: result.isWaiting,
+      hasAction: result.hasAction,
+      dueDate: result.dueDate || null
+    })
+
+    // Auto-create trigger data for WAITING items with a future dueDate
+    let autoTrigger: { type: string; triggerDate: string } | undefined
+    if (container === 'WAITING' && result.dueDate) {
+      const dueDate = new Date(result.dueDate)
+      const now = new Date()
+      const twentyOneDaysBefore = new Date(dueDate)
+      twentyOneDaysBefore.setDate(twentyOneDaysBefore.getDate() - 21)
+
+      // If 21 days before dueDate is in the future, use it; otherwise use dueDate itself
+      const triggerDate = twentyOneDaysBefore > now ? twentyOneDaysBefore : dueDate
+      autoTrigger = {
+        type: 'DATE_EXACT',
+        triggerDate: triggerDate.toISOString().split('T')[0]
+      }
+    }
 
     return {
       description: result.description,
       suggestedAction: result.suggestedAction || null,
       urgency: result.urgency as Urgency,
       dueDate: result.dueDate || null,
-      confidence: result.confidence,
+      confidence: commitmentConfidence, // backward compat
+      commitmentConfidence,
+      parseConfidence,
       reasoning: result.reasoning,
       parties: result.parties || [],
       triggers: result.triggers || [],
       missingInfo: result.missingInfo || [],
       container,
-      recurrenceRule: result.recurrenceRule || null
+      recurrenceRule: result.recurrenceRule || null,
+      autoTrigger
     }
   } catch (error) {
     console.error('AI parsing error:', error)
@@ -206,6 +262,8 @@ export async function parseActionText(text: string, activeRuleInstructions: stri
       urgency: 'MEDIUM',
       dueDate: null,
       confidence: 0.3,
+      commitmentConfidence: 0.3,
+      parseConfidence: 0.3,
       reasoning: 'AI parsing failed, using raw input',
       parties: [],
       triggers: [],
@@ -217,14 +275,20 @@ export async function parseActionText(text: string, activeRuleInstructions: stri
 }
 
 function determineContainer(result: {
-  confidence: number
+  commitmentConfidence: number
   missingInfo: string[]
   isWaiting?: boolean
   hasAction: boolean
+  dueDate: string | null
 }): Container {
-  // No actionable content
-  if (!result.hasAction) {
-    return 'CANDIDATES' // Let user decide
+  // Low commitment confidence — probably not a real action
+  if (result.commitmentConfidence < 0.3) {
+    return 'CANDIDATES' // Will likely be filtered out
+  }
+
+  // Missing info with moderate-to-low commitment confidence → needs clarification
+  if (result.missingInfo.length > 0 && result.commitmentConfidence < 0.6) {
+    return 'AMBIGUITY'
   }
 
   // Waiting for a trigger
@@ -232,13 +296,19 @@ function determineContainer(result: {
     return 'WAITING'
   }
 
-  // Missing critical information
-  if (result.missingInfo.length > 0 && result.confidence < 0.6) {
-    return 'AMBIGUITY'
+  // Due date is more than 21 days in the future → park in WAITING
+  if (result.dueDate) {
+    const dueDate = new Date(result.dueDate)
+    const now = new Date()
+    const diffMs = dueDate.getTime() - now.getTime()
+    const diffDays = diffMs / (1000 * 60 * 60 * 24)
+    if (diffDays > 21) {
+      return 'WAITING'
+    }
   }
 
-  // High confidence and complete
-  if (result.confidence >= 0.8 && result.missingInfo.length === 0) {
+  // High commitment confidence and complete → ready to act
+  if (result.commitmentConfidence >= 0.8 && result.missingInfo.length === 0) {
     return 'ACTIONABLE_NOW'
   }
 

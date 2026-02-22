@@ -20,6 +20,11 @@ model Action {
   container       Container       @default(CANDIDATES)
   urgency         Urgency         @default(MEDIUM)
   confidence      Float           @default(0.5)
+  commitmentConfidence Float?
+
+  // Flags (not containers — action stays visible in its container)
+  needsClarification Boolean       @default(false)
+  needsTuning        Boolean       @default(false)
 
   // Dates
   dueDate         DateTime?
@@ -59,7 +64,7 @@ enum Container {
   CANDIDATES
   AMBIGUITY
   WAITING
-  TUNING
+  TUNING          // @deprecated — kept for historical ActionEvent records only. Use needsTuning flag instead.
 }
 
 enum Urgency {
@@ -76,6 +81,7 @@ model ActionGroup {
   actions     Action[]
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+  archivedAt  DateTime?
 
   @@map("action_groups")
 }

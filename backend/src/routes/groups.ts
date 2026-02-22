@@ -7,6 +7,7 @@ const router = Router()
 router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const groups = await prisma.actionGroup.findMany({
+      where: { archivedAt: null },
       include: {
         actions: {
           where: { archivedAt: null },
@@ -119,11 +120,16 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = parseInt(req.params.id as string)
-    const { name, description } = req.body
+    const { name, description, archivedAt } = req.body
+
+    const data: Record<string, unknown> = {}
+    if (name !== undefined) data.name = name
+    if (description !== undefined) data.description = description
+    if (archivedAt !== undefined) data.archivedAt = archivedAt ? new Date(archivedAt) : null
 
     const group = await prisma.actionGroup.update({
       where: { id },
-      data: { name, description },
+      data,
       include: { actions: true }
     })
 

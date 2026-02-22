@@ -345,9 +345,13 @@ router.post('/feedback', async (req: Request, res: Response, next: NextFunction)
       transformation = correction || 'Manual correction needed'
     }
 
+    const truncatedDesc = action.description.length > 100
+      ? action.description.substring(0, 100)
+      : action.description
+
     const rule = await prisma.tuningRule.create({
       data: {
-        description: `Feedback on action #${actionId}`,
+        description: `Correction: ${truncatedDesc}`,
         category,
         condition,
         transformation,
@@ -355,20 +359,28 @@ router.post('/feedback', async (req: Request, res: Response, next: NextFunction)
       }
     })
 
-    // Move the action to Tuning container if not already there
-    if (action.container !== 'TUNING') {
-      await prisma.action.update({
-        where: { id: actionId },
-        data: { container: 'TUNING' }
-      })
+    // Apply the user's correction immediately and flag for tuning
+    const updateData: Record<string, unknown> = { needsTuning: true }
+    if (feedbackType === 'urgency_incorrect' && correction) {
+      updateData.urgency = correction
+    } else if (feedbackType === 'container_incorrect' && correction) {
+      updateData.container = correction
+    }
 
+    await prisma.action.update({
+      where: { id: actionId },
+      data: updateData
+    })
+
+    // Log correction event if container changed
+    if (feedbackType === 'container_incorrect' && correction && correction !== action.container) {
       await prisma.actionEvent.create({
         data: {
           actionId,
           type: 'CONTAINER_CHANGE',
           fromContainer: action.container,
-          toContainer: 'TUNING',
-          details: 'Moved to tuning for AI feedback'
+          toContainer: correction,
+          details: 'User corrected container via tuning feedback'
         }
       })
     }

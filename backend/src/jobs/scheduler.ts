@@ -23,16 +23,18 @@ export function initializeScheduler(): void {
     await checkTriggers()
   })
 
-  // Follow-up check: daily at 9 AM
+  // Follow-up check + WAITING safety net: daily at 9 AM
   cron.schedule('0 9 * * *', async () => {
     console.log('Running follow-up check...')
     await checkFollowUps()
+    console.log('Running WAITING safety net check...')
+    await checkWaitingSafety()
   })
 
   console.log('Scheduler initialized with jobs:')
   console.log('  - Gmail scan: every 4 hours')
   console.log('  - Trigger check: every hour')
-  console.log('  - Follow-up check: 9 AM daily')
+  console.log('  - Follow-up check + WAITING safety net: 9 AM daily')
 }
 
 /**
@@ -336,6 +338,60 @@ async function checkFollowUps(): Promise<void> {
     console.log(`Follow-up check complete: ${followUpCount} actions need attention`)
   } catch (err) {
     console.error('Follow-up check failed:', err)
+  }
+}
+
+/**
+ * WAITING safety net (P18): flag WAITING actions that have no active trigger
+ * so the user can clarify what they're waiting for.
+ */
+async function checkWaitingSafety(): Promise<void> {
+  try {
+    // Find all non-archived, non-completed WAITING actions with their triggers
+    const waitingActions = await prisma.action.findMany({
+      where: {
+        container: 'WAITING',
+        archivedAt: null,
+        completedAt: null
+      },
+      include: {
+        triggers: true
+      }
+    })
+
+    const toFlag: number[] = []
+
+    for (const action of waitingActions) {
+      if (action.triggers.length === 0) {
+        // No triggers at all — needs clarification
+        toFlag.push(action.id)
+      } else {
+        // Check if ALL triggers are date-based types with no dates set
+        const allTriggersInvalid = action.triggers.every(t => {
+          // WEB_CONDITION and MANUAL_CHECK are valid without dates
+          if (t.type === 'WEB_CONDITION' || t.type === 'MANUAL_CHECK') {
+            return false
+          }
+          // For date-based triggers, they need at least one date
+          return t.triggerDate === null && t.dateWindowStart === null
+        })
+
+        if (allTriggersInvalid) {
+          toFlag.push(action.id)
+        }
+      }
+    }
+
+    if (toFlag.length > 0) {
+      await prisma.action.updateMany({
+        where: { id: { in: toFlag } },
+        data: { needsClarification: true }
+      })
+    }
+
+    console.log(`Flagged ${toFlag.length} WAITING actions with no active trigger for clarification`)
+  } catch (err) {
+    console.error('WAITING safety net check failed:', err)
   }
 }
 

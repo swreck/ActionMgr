@@ -17,19 +17,45 @@ router.get('/counts', async (_req: Request, res: Response, next: NextFunction) =
       }
     })
 
-    const result = {
+    const result: Record<string, number> = {
       ACTIONABLE_NOW: 0,
       CANDIDATES: 0,
       AMBIGUITY: 0,
       WAITING: 0,
-      TUNING: 0
+      TUNING: 0  // kept for backward compat, always 0
     }
 
     for (const row of counts) {
+      // TUNING container is deprecated — don't count it
+      if (row.container === 'TUNING') continue
       result[row.container] = row._count.id
     }
 
     res.json(result)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// GET /api/containers/flag-counts - Get counts of flagged actions
+router.get('/flag-counts', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [needsClarification, needsTuning] = await Promise.all([
+      prisma.action.count({
+        where: {
+          archivedAt: null,
+          needsClarification: true
+        }
+      }),
+      prisma.action.count({
+        where: {
+          archivedAt: null,
+          needsTuning: true
+        }
+      })
+    ])
+
+    res.json({ needsClarification, needsTuning })
   } catch (err) {
     next(err)
   }

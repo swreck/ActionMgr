@@ -3,7 +3,7 @@ export type Container =
   | 'CANDIDATES'
   | 'AMBIGUITY'
   | 'WAITING'
-  | 'TUNING'
+  | 'TUNING' // deprecated — kept for backward compat; will be removed when TUNING becomes a flag
 
 export type Urgency = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 
@@ -27,6 +27,10 @@ export interface Action {
   version: number
   sourceId: number
   needsFollowUp?: boolean
+  commitmentConfidence?: number
+  needsClarification?: boolean
+  needsTuning?: boolean
+  parseConfidence?: number
   source?: Source
   events?: ActionEvent[]
 }
@@ -70,7 +74,12 @@ export interface ContainerCounts {
   CANDIDATES: number
   AMBIGUITY: number
   WAITING: number
-  TUNING: number
+  TUNING: number // deprecated — kept for backward compat; always 0
+}
+
+export interface FlagCounts {
+  needsClarification: number
+  needsTuning: number
 }
 
 export const CONTAINER_LABELS: Record<Container, string> = {
@@ -78,7 +87,7 @@ export const CONTAINER_LABELS: Record<Container, string> = {
   CANDIDATES: 'Review',
   AMBIGUITY: 'Clarify',
   WAITING: 'Waiting',
-  TUNING: 'Tuning'
+  TUNING: 'Tuning' // deprecated — not shown in nav; kept for backward compat
 }
 
 export const URGENCY_LABELS: Record<Urgency, string> = {

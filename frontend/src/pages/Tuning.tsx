@@ -22,6 +22,7 @@ export default function Tuning({ onClose }: TuningProps) {
   const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<TabType>('proposed')
   const [rejectingId, setRejectingId] = useState<number | null>(null)
+  const [expandedId, setExpandedId] = useState<number | null>(null)
 
   useEffect(() => {
     loadData()
@@ -167,127 +168,170 @@ export default function Tuning({ onClose }: TuningProps) {
             <div className="tuning-loading">Loading...</div>
           ) : filteredRules.length === 0 ? (
             <div className="tuning-empty">
-              {activeTab === 'proposed' && 'No rules ready for review.'}
-              {activeTab === 'shadow' && 'No rules currently testing.'}
-              {activeTab === 'active' && 'No active tuning rules.'}
-              {activeTab === 'rejected' && 'No rejected rules.'}
-              <p className="tuning-hint">
-                Tuning rules are created when you provide feedback on AI-parsed actions.
-              </p>
+              {rules.length === 0 ? (
+                <>
+                  <p>No tuning rules yet.</p>
+                  <p className="tuning-hint">
+                    Tuning rules help the AI learn from your corrections. When you correct an action's urgency or container, the system creates rules to improve future parsing.
+                  </p>
+                </>
+              ) : (
+                <>
+                  {activeTab === 'proposed' && 'No rules ready for review.'}
+                  {activeTab === 'shadow' && 'No rules currently testing.'}
+                  {activeTab === 'active' && 'No active tuning rules.'}
+                  {activeTab === 'rejected' && 'No rejected rules.'}
+                  <p className="tuning-hint">
+                    Tuning rules are created when you provide feedback on AI-parsed actions.
+                  </p>
+                </>
+              )}
             </div>
           ) : (
-            filteredRules.map(rule => (
-              <div key={rule.id} className="rule-card">
-                <div className="rule-header">
-                  <span className={`rule-category category-${rule.category}`}>
-                    {rule.category}
-                  </span>
-                  <span className={`rule-status status-${rule.status.toLowerCase()}`}>
-                    {getStatusLabel(rule.status)}
-                  </span>
-                </div>
-
-                <div className="rule-description">{rule.description}</div>
-
-                <div className="rule-details">
-                  <div className="rule-detail">
-                    <span className="detail-label">When:</span>
-                    <span className="detail-text">{rule.condition}</span>
-                  </div>
-                  <div className="rule-detail">
-                    <span className="detail-label">Then:</span>
-                    <span className="detail-text">{rule.transformation}</span>
-                  </div>
-                </div>
-
-                {(rule.status === 'SHADOW' || rule.status === 'PROPOSED') && (
-                  <div className="rule-progress">
-                    <div className="progress-bar">
-                      <div
-                        className="progress-fill"
-                        style={{
-                          width: `${Math.min((rule.shadowCount / rule.shadowThreshold) * 100, 100)}%`
-                        }}
-                      />
+            filteredRules.map(rule => {
+              const isExpanded = expandedId === rule.id
+              return (
+                <div key={rule.id} className={`rule-card ${isExpanded ? 'rule-card-expanded' : ''}`}>
+                  <div
+                    className="rule-collapsed"
+                    onClick={() => setExpandedId(isExpanded ? null : rule.id)}
+                  >
+                    <div className="rule-collapsed-top">
+                      <span className={`rule-category category-${rule.category}`}>
+                        {rule.category}
+                      </span>
+                      <span className={`rule-status status-${rule.status.toLowerCase()}`}>
+                        {getStatusLabel(rule.status)}
+                      </span>
+                      <span className="rule-expand-icon">{isExpanded ? '\u25B2' : '\u25BC'}</span>
                     </div>
-                    <span className="progress-text">
-                      {rule.shadowCount}/{rule.shadowThreshold} tests
-                      ({getSuccessRate(rule)}% success)
-                    </span>
+                    <div className="rule-description-collapsed">
+                      {isExpanded ? rule.description : (
+                        rule.description.length > 60
+                          ? rule.description.slice(0, 60) + '...'
+                          : rule.description
+                      )}
+                    </div>
+                    {!isExpanded && (rule.status === 'SHADOW' || rule.status === 'PROPOSED') && (
+                      <div className="rule-progress">
+                        <div className="progress-bar">
+                          <div
+                            className="progress-fill"
+                            style={{
+                              width: `${Math.min((rule.shadowCount / rule.shadowThreshold) * 100, 100)}%`
+                            }}
+                          />
+                        </div>
+                        <span className="progress-text">
+                          {rule.shadowCount}/{rule.shadowThreshold} tests
+                          ({getSuccessRate(rule)}% success)
+                        </span>
+                      </div>
+                    )}
                   </div>
-                )}
 
-                {rule.userFeedback && (
-                  <div className="rule-feedback">
-                    <span className="detail-label">Feedback:</span>
-                    {rule.userFeedback}
-                  </div>
-                )}
+                  {isExpanded && (
+                    <div className="rule-expanded-body">
+                      <div className="rule-details">
+                        <div className="rule-detail">
+                          <span className="detail-label">When:</span>
+                          <span className="detail-text">{rule.condition}</span>
+                        </div>
+                        <div className="rule-detail">
+                          <span className="detail-label">Then:</span>
+                          <span className="detail-text">{rule.transformation}</span>
+                        </div>
+                      </div>
 
-                <div className="rule-actions">
-                  {rule.status === 'PROPOSED' && rejectingId !== rule.id && (
-                    <>
-                      <button
-                        className="btn btn-success btn-small"
-                        onClick={() => handleActivate(rule.id)}
-                      >
-                        Activate
-                      </button>
-                      <button
-                        className="btn btn-secondary btn-small"
-                        onClick={() => setRejectingId(rule.id)}
-                      >
-                        Reject
-                      </button>
-                    </>
-                  )}
-                  {rule.status === 'PROPOSED' && rejectingId === rule.id && (
-                    <div className="reject-options">
-                      <button
-                        className="btn btn-secondary btn-small"
-                        onClick={() => handleReject(rule.id, false)}
-                      >
-                        Just reject
-                      </button>
-                      <button
-                        className="btn btn-secondary btn-small reject-stop"
-                        onClick={() => handleReject(rule.id, true)}
-                      >
-                        Stop {rule.category} suggestions
-                      </button>
-                      <button
-                        className="btn btn-secondary btn-small"
-                        onClick={() => { handleAskLess(rule.id); setRejectingId(null) }}
-                      >
-                        Ask less often
-                      </button>
-                      <button
-                        className="btn-link"
-                        onClick={() => setRejectingId(null)}
-                      >
-                        Cancel
-                      </button>
+                      {(rule.status === 'SHADOW' || rule.status === 'PROPOSED') && (
+                        <div className="rule-progress">
+                          <div className="progress-bar">
+                            <div
+                              className="progress-fill"
+                              style={{
+                                width: `${Math.min((rule.shadowCount / rule.shadowThreshold) * 100, 100)}%`
+                              }}
+                            />
+                          </div>
+                          <span className="progress-text">
+                            {rule.shadowCount}/{rule.shadowThreshold} tests
+                            ({getSuccessRate(rule)}% success)
+                          </span>
+                        </div>
+                      )}
+
+                      {rule.userFeedback && (
+                        <div className="rule-feedback">
+                          <span className="detail-label">Feedback:</span>
+                          {rule.userFeedback}
+                        </div>
+                      )}
+
+                      <div className="rule-actions">
+                        {rule.status === 'PROPOSED' && rejectingId !== rule.id && (
+                          <>
+                            <button
+                              className="btn btn-success btn-small"
+                              onClick={(e) => { e.stopPropagation(); handleActivate(rule.id) }}
+                            >
+                              Activate
+                            </button>
+                            <button
+                              className="btn btn-secondary btn-small"
+                              onClick={(e) => { e.stopPropagation(); setRejectingId(rule.id) }}
+                            >
+                              Reject
+                            </button>
+                          </>
+                        )}
+                        {rule.status === 'PROPOSED' && rejectingId === rule.id && (
+                          <div className="reject-options">
+                            <button
+                              className="btn btn-secondary btn-small"
+                              onClick={(e) => { e.stopPropagation(); handleReject(rule.id, false) }}
+                            >
+                              Just reject
+                            </button>
+                            <button
+                              className="btn btn-secondary btn-small reject-stop"
+                              onClick={(e) => { e.stopPropagation(); handleReject(rule.id, true) }}
+                            >
+                              Stop {rule.category} suggestions
+                            </button>
+                            <button
+                              className="btn btn-secondary btn-small"
+                              onClick={(e) => { e.stopPropagation(); handleAskLess(rule.id); setRejectingId(null) }}
+                            >
+                              Ask less often
+                            </button>
+                            <button
+                              className="btn-link"
+                              onClick={(e) => { e.stopPropagation(); setRejectingId(null) }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        )}
+                        {rule.status === 'SHADOW' && (
+                          <button
+                            className="btn btn-primary btn-small"
+                            onClick={(e) => { e.stopPropagation(); handleActivate(rule.id) }}
+                          >
+                            Activate Early
+                          </button>
+                        )}
+                        <button
+                          className="btn-link danger"
+                          onClick={(e) => { e.stopPropagation(); handleDelete(rule.id) }}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                   )}
-                  {rule.status === 'SHADOW' && (
-                    <button
-                      className="btn btn-primary btn-small"
-                      onClick={() => handleActivate(rule.id)}
-                    >
-                      Activate Early
-                    </button>
-                  )}
-                  {(rule.status === 'REJECTED' || rule.status === 'ACTIVE') && (
-                    <button
-                      className="btn-link danger"
-                      onClick={() => handleDelete(rule.id)}
-                    >
-                      Delete
-                    </button>
-                  )}
                 </div>
-              </div>
-            ))
+              )
+            })
           )}
         </div>
       </div>
@@ -392,8 +436,39 @@ export default function Tuning({ onClose }: TuningProps) {
         .rule-card {
           background: var(--bg-card);
           border-radius: 12px;
-          padding: 16px;
           margin-bottom: 12px;
+          overflow: hidden;
+        }
+        .rule-card-expanded {
+          border: 1px solid rgba(255,255,255,0.1);
+        }
+        .rule-collapsed {
+          padding: 16px;
+          cursor: pointer;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .rule-collapsed:active {
+          background: rgba(255,255,255,0.03);
+        }
+        .rule-collapsed-top {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 6px;
+        }
+        .rule-expand-icon {
+          margin-left: auto;
+          font-size: 10px;
+          color: var(--text-secondary);
+        }
+        .rule-description-collapsed {
+          font-size: 14px;
+          font-weight: 500;
+          color: var(--text-primary);
+          line-height: 1.4;
+        }
+        .rule-expanded-body {
+          padding: 0 16px 16px;
         }
         .rule-header {
           display: flex;
@@ -474,6 +549,8 @@ export default function Tuning({ onClose }: TuningProps) {
         .rule-actions {
           display: flex;
           gap: 8px;
+          flex-wrap: wrap;
+          align-items: center;
         }
         .btn-small {
           padding: 6px 12px;

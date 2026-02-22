@@ -4,10 +4,157 @@ import { prisma } from '../index'
 
 const router = Router()
 
+const VALID_BULK_CONTAINERS: Container[] = ['ACTIONABLE_NOW', 'CANDIDATES', 'AMBIGUITY', 'WAITING']
+const BULK_LIMIT = 50
+
+// POST /api/actions/bulk/complete - Bulk complete actions
+router.post('/bulk/complete', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { ids } = req.body
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: 'ids must be a non-empty array' })
+    }
+    if (ids.length > BULK_LIMIT) {
+      return res.status(400).json({ message: `Maximum ${BULK_LIMIT} ids per request` })
+    }
+
+    const now = new Date()
+    let completed = 0
+
+    for (const id of ids) {
+      const numId = typeof id === 'string' ? parseInt(id) : id
+      try {
+        await prisma.action.update({
+          where: { id: numId },
+          data: {
+            completedAt: now,
+            archivedAt: now,
+            version: { increment: 1 }
+          }
+        })
+        await prisma.actionEvent.create({
+          data: {
+            actionId: numId,
+            type: 'COMPLETED'
+          }
+        })
+        completed++
+      } catch {
+        // Skip actions that don't exist
+      }
+    }
+
+    res.json({ completed })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// POST /api/actions/bulk/delete - Bulk soft-delete (archive) actions
+router.post('/bulk/delete', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { ids } = req.body
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: 'ids must be a non-empty array' })
+    }
+    if (ids.length > BULK_LIMIT) {
+      return res.status(400).json({ message: `Maximum ${BULK_LIMIT} ids per request` })
+    }
+
+    const now = new Date()
+    let deleted = 0
+
+    for (const id of ids) {
+      const numId = typeof id === 'string' ? parseInt(id) : id
+      try {
+        await prisma.action.update({
+          where: { id: numId },
+          data: {
+            archivedAt: now,
+            version: { increment: 1 }
+          }
+        })
+        await prisma.actionEvent.create({
+          data: {
+            actionId: numId,
+            type: 'ARCHIVED'
+          }
+        })
+        deleted++
+      } catch {
+        // Skip actions that don't exist
+      }
+    }
+
+    res.json({ deleted })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// POST /api/actions/bulk/move - Bulk move actions to a different container
+router.post('/bulk/move', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { ids, container } = req.body
+
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: 'ids must be a non-empty array' })
+    }
+    if (ids.length > BULK_LIMIT) {
+      return res.status(400).json({ message: `Maximum ${BULK_LIMIT} ids per request` })
+    }
+    if (!container || !VALID_BULK_CONTAINERS.includes(container as Container)) {
+      return res.status(400).json({
+        message: `container must be one of: ${VALID_BULK_CONTAINERS.join(', ')}`
+      })
+    }
+
+    let moved = 0
+
+    for (const id of ids) {
+      const numId = typeof id === 'string' ? parseInt(id) : id
+      try {
+        const existing = await prisma.action.findUnique({ where: { id: numId } })
+        if (!existing) continue
+
+        const updateData: Prisma.ActionUpdateInput = {
+          container: container as Container,
+          version: { increment: 1 }
+        }
+        if (existing.needsClarification) {
+          updateData.needsClarification = false
+        }
+
+        await prisma.action.update({
+          where: { id: numId },
+          data: updateData
+        })
+        await prisma.actionEvent.create({
+          data: {
+            actionId: numId,
+            type: 'CONTAINER_CHANGE',
+            fromContainer: existing.container,
+            toContainer: container as Container
+          }
+        })
+        moved++
+      } catch {
+        // Skip actions that don't exist or fail
+      }
+    }
+
+    res.json({ moved })
+  } catch (err) {
+    next(err)
+  }
+})
+
 // GET /api/actions - List actions with optional filters
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { container, urgency, search, archived } = req.query
+    const { container, urgency, search, archived, needsClarification, needsTuning } = req.query
 
     const where: Prisma.ActionWhereInput = {}
 
@@ -16,8 +163,19 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       where.archivedAt = null
     }
 
-    // Filter by container
-    if (container && typeof container === 'string') {
+    // Flag-based filters — when active, show from ALL containers
+    const filterByFlags = needsClarification === 'true' || needsTuning === 'true'
+
+    if (filterByFlags) {
+      if (needsClarification === 'true') {
+        where.needsClarification = true
+      }
+      if (needsTuning === 'true') {
+        where.needsTuning = true
+      }
+      // Don't filter by container when filtering by flags
+    } else if (container && typeof container === 'string') {
+      // Filter by container
       where.container = container as Container
     } else if (!container) {
       // Default view: show Actionable, Candidates, Ambiguity (not Waiting/Tuning)
@@ -162,7 +320,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = parseInt(req.params.id as string)
-    const { version, description, suggestedAction, urgency, dueDate, container } = req.body
+    const { version, description, suggestedAction, urgency, dueDate, container, needsClarification, needsTuning } = req.body
 
     // Check version for optimistic concurrency
     const existing = await prisma.action.findUnique({ where: { id } })
@@ -188,6 +346,8 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
     if (urgency !== undefined) updateData.urgency = urgency
     if (dueDate !== undefined) updateData.dueDate = dueDate ? new Date(dueDate) : null
     if (container !== undefined) updateData.container = container
+    if (needsClarification !== undefined) updateData.needsClarification = needsClarification
+    if (needsTuning !== undefined) updateData.needsTuning = needsTuning
 
     const action = await prisma.action.update({
       where: { id },
@@ -290,12 +450,19 @@ router.post('/:id/move', async (req: Request, res: Response, next: NextFunction)
       return res.status(404).json({ message: 'Action not found' })
     }
 
+    const updateData: Prisma.ActionUpdateInput = {
+      container: container as Container,
+      version: { increment: 1 }
+    }
+
+    // Clear needsClarification flag when user takes action by moving
+    if (existing.needsClarification) {
+      updateData.needsClarification = false
+    }
+
     const action = await prisma.action.update({
       where: { id },
-      data: {
-        container: container as Container,
-        version: { increment: 1 }
-      }
+      data: updateData
     })
 
     await prisma.actionEvent.create({

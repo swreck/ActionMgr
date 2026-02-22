@@ -1,13 +1,22 @@
-import { useEffect, useState } from 'react'
-import { Container, ContainerCounts, CONTAINER_LABELS } from '../types'
-import { getContainerCounts } from '../api/client'
+import { useEffect, useState, useCallback } from 'react'
+import { Container, ContainerCounts, FlagCounts, CONTAINER_LABELS } from '../types'
+import { getContainerCounts, getFlagCounts } from '../api/client'
 
 interface ContainerNavProps {
   activeContainer: Container | null
   onContainerChange: (container: Container | null) => void
+  onFlagFilter?: (flag: 'needsClarification' | 'needsTuning') => void
 }
 
-export default function ContainerNav({ activeContainer, onContainerChange }: ContainerNavProps) {
+let _refreshCounts: (() => Promise<void>) | null = null
+
+/** Call this from parent components to refresh container + flag counts after any action change. */
+export function refreshCounts(): Promise<void> {
+  if (_refreshCounts) return _refreshCounts()
+  return Promise.resolve()
+}
+
+export default function ContainerNav({ activeContainer, onContainerChange, onFlagFilter }: ContainerNavProps) {
   const [counts, setCounts] = useState<ContainerCounts>({
     ACTIONABLE_NOW: 0,
     CANDIDATES: 0,
@@ -16,27 +25,33 @@ export default function ContainerNav({ activeContainer, onContainerChange }: Con
     TUNING: 0
   })
 
-  useEffect(() => {
-    loadCounts()
-    const interval = setInterval(loadCounts, 30000)
-    return () => clearInterval(interval)
-  }, [])
+  const [flagCounts, setFlagCounts] = useState<FlagCounts>({
+    needsClarification: 0,
+    needsTuning: 0
+  })
 
-  async function loadCounts() {
+  const loadCounts = useCallback(async () => {
     try {
-      const data = await getContainerCounts()
+      const [data, flags] = await Promise.all([
+        getContainerCounts(),
+        getFlagCounts()
+      ])
       setCounts(data)
+      setFlagCounts(flags)
     } catch (err) {
       console.error('Failed to load counts:', err)
     }
-  }
+  }, [])
+
+  useEffect(() => {
+    _refreshCounts = loadCounts
+    loadCounts()
+    return () => {
+      _refreshCounts = null
+    }
+  }, [loadCounts])
 
   function handleClick(container: Container) {
-    if (container === 'TUNING') {
-      // Tuning opens a modal — delegate to parent without changing active container
-      onContainerChange('TUNING')
-      return
-    }
     if (activeContainer === container) {
       onContainerChange(null)
     } else {
@@ -67,8 +82,33 @@ export default function ContainerNav({ activeContainer, onContainerChange }: Con
       </div>
       <div className="grid-row">
         {btn('WAITING', 'waiting')}
-        {btn('TUNING', 'tuning')}
       </div>
+      {(flagCounts.needsClarification > 0 || flagCounts.needsTuning > 0) && (
+        <div className="flag-badges">
+          {flagCounts.needsClarification > 0 && (
+            <button
+              className="flag-badge flag-badge--clarify"
+              onClick={() => onFlagFilter?.('needsClarification')}
+              title="Actions needing clarification"
+            >
+              <span className="flag-badge-icon">?</span>
+              <span className="flag-badge-label">Clarify</span>
+              <span className="flag-badge-count">{flagCounts.needsClarification}</span>
+            </button>
+          )}
+          {flagCounts.needsTuning > 0 && (
+            <button
+              className="flag-badge flag-badge--tuning"
+              onClick={() => onFlagFilter?.('needsTuning')}
+              title="Actions flagged for tuning"
+            >
+              <span className="flag-badge-icon">&#x2699;</span>
+              <span className="flag-badge-label">Tuning</span>
+              <span className="flag-badge-count">{flagCounts.needsTuning}</span>
+            </button>
+          )}
+        </div>
+      )}
     </div>
   )
 }

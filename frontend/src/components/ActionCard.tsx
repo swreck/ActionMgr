@@ -3,9 +3,12 @@ import { Action } from '../types'
 interface ActionCardProps {
   action: Action
   onClick: () => void
+  selectable?: boolean
+  selected?: boolean
+  onSelect?: (id: number) => void
 }
 
-export default function ActionCard({ action, onClick }: ActionCardProps) {
+export default function ActionCard({ action, onClick, selectable, selected, onSelect }: ActionCardProps) {
   const urgencyClass = action.urgency.toLowerCase()
 
   function getConfidenceLevel(): 'high' | 'medium' | 'low' {
@@ -32,12 +35,27 @@ export default function ActionCard({ action, onClick }: ActionCardProps) {
 
   return (
     <div className="action-card" onClick={onClick}>
+      {selectable && (
+        <div className="action-checkbox-wrapper" onClick={(e) => e.stopPropagation()}>
+          <input
+            type="checkbox"
+            className="action-checkbox"
+            checked={!!selected}
+            onChange={() => onSelect?.(action.id)}
+          />
+        </div>
+      )}
       <div className={`action-urgency-bar ${urgencyClass}`} />
       <div className="action-content">
         {action.needsFollowUp && (
           <div className="action-followup-nudge">Still important? Tap to review.</div>
         )}
         <div className="action-description">{action.description}</div>
+        {action.source?.type === 'GMAIL' && (action.source.emailFrom || action.source.emailSubject) && (
+          <div className="action-source-line">
+            From: {action.source.emailFrom || 'Unknown'} &middot; {action.source.emailSubject || 'No subject'}
+          </div>
+        )}
         {action.suggestedAction && (
           <div className="action-suggested">{action.suggestedAction}</div>
         )}
@@ -47,6 +65,12 @@ export default function ActionCard({ action, onClick }: ActionCardProps) {
           )}
           {action.container === 'WAITING' && (
             <span className="badge badge-waiting">Waiting</span>
+          )}
+          {action.needsClarification && (
+            <span className="badge badge-clarify">Clarify</span>
+          )}
+          {action.needsTuning && (
+            <span className="badge badge-tuning">Tuning</span>
           )}
           {dueLabel && (
             <span className="action-due">{dueLabel}</span>

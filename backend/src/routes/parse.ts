@@ -51,11 +51,13 @@ router.post('/confirm', async (req: Request, res: Response, next: NextFunction) 
       urgency,
       dueDate,
       confidence,
+      commitmentConfidence,
       reasoning,
       container,
       parties,
       triggers,
-      recurrenceRule
+      recurrenceRule,
+      missingInfo
     } = req.body as ParsedAction & { rawInput: string }
 
     if (!rawInput || !description) {
@@ -79,6 +81,8 @@ router.post('/confirm', async (req: Request, res: Response, next: NextFunction) 
         urgency: urgency || 'MEDIUM',
         dueDate: dueDate ? new Date(dueDate) : null,
         confidence: confidence || 0.5,
+        commitmentConfidence: commitmentConfidence ?? null,
+        needsClarification: (missingInfo && missingInfo.length > 0 && (confidence || 0.5) >= 0.3) ? true : false,
         aiReasoning: reasoning,
         container: container || 'CANDIDATES',
         recurrenceRule: recurrenceRule || null,
@@ -124,6 +128,32 @@ router.post('/confirm', async (req: Request, res: Response, next: NextFunction) 
             type: trigger.type as 'DATE_EXACT' | 'DATE_WINDOW' | 'EMAIL_REPLY' | 'MANUAL_CHECK' | 'WEB_CONDITION',
             description: trigger.description,
             webQuery: trigger.webQuery || null
+          }
+        })
+      }
+    }
+
+    // Auto-create DATE_EXACT trigger for future due dates in WAITING with no explicit triggers
+    if (
+      dueDate &&
+      container === 'WAITING' &&
+      (!triggers || triggers.length === 0)
+    ) {
+      const dueDateObj = new Date(dueDate)
+      const now = new Date()
+      if (dueDateObj > now) {
+        const twentyOneDaysMs = 21 * 24 * 60 * 60 * 1000
+        const msUntilDue = dueDateObj.getTime() - now.getTime()
+        const triggerDate = msUntilDue > twentyOneDaysMs
+          ? new Date(dueDateObj.getTime() - twentyOneDaysMs)
+          : dueDateObj
+
+        await prisma.trigger.create({
+          data: {
+            actionId: action.id,
+            type: 'DATE_EXACT',
+            description: `Auto-reminder: due date is ${dueDateObj.toISOString().split('T')[0]}`,
+            triggerDate
           }
         })
       }

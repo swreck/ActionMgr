@@ -86,6 +86,10 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
   const [reparsing, setReparsing] = useState(false)
   const [repeatDate, setRepeatDate] = useState('')
   const [showReclassify, setShowReclassify] = useState(false)
+  const [showDatePicker, setShowDatePicker] = useState<'defer' | 'reschedule' | null>(null)
+  const [datePickerValue, setDatePickerValue] = useState('')
+  const [feedbackPicker, setFeedbackPicker] = useState<'urgency' | 'container' | null>(null)
+  const [feedbackPickerValue, setFeedbackPickerValue] = useState('')
 
   // When repeat prompt opens, auto-fill next date from recurrenceRule
   useEffect(() => {
@@ -228,24 +232,29 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
     }
   }
 
-  async function handleDefer() {
-    if (!action) return
-    const dateStr = prompt('Defer until date (YYYY-MM-DD):')
-    if (!dateStr) return
+  function handleDefer() {
+    setShowDatePicker('defer')
+    setDatePickerValue('')
+    setShowMenu(false)
+  }
+
+  async function confirmDefer() {
+    if (!action || !datePickerValue) return
 
     try {
       await createTrigger({
         actionId: action.id,
         type: 'DATE_EXACT',
-        description: `Deferred until ${dateStr}`,
-        triggerDate: dateStr
+        description: `Deferred until ${datePickerValue}`,
+        triggerDate: datePickerValue
       })
+      setShowDatePicker(null)
+      setDatePickerValue('')
       loadAction()
       onUpdate()
     } catch (err) {
       alert('Failed to defer action')
     }
-    setShowMenu(false)
   }
 
   function handleReclassify() {
@@ -421,6 +430,50 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             <div className="action-detail-content">
               <div className="action-detail-description">{action.description}</div>
 
+              {/* Source attribution */}
+              <div className="action-detail-source">
+                {action.source?.type === 'GMAIL' ? (
+                  <>
+                    <div className="source-row">
+                      <span className="detail-label">From</span>
+                      <span className="detail-value">{action.source.emailFrom || 'Unknown'}</span>
+                    </div>
+                    <div className="source-row">
+                      <span className="detail-label">Subject</span>
+                      <span className="detail-value">{action.source.emailSubject || 'No subject'}</span>
+                    </div>
+                    {action.source.emailDate && (
+                      <div className="source-row">
+                        <span className="detail-label">Date</span>
+                        <span className="detail-value">{new Date(action.source.emailDate).toLocaleDateString()}</span>
+                      </div>
+                    )}
+                    {action.source.emailId && (
+                      <div className="source-row">
+                        <a
+                          href={`https://mail.google.com/mail/u/0/#inbox/${action.source.emailId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="source-gmail-link"
+                        >
+                          View in Gmail
+                        </a>
+                      </div>
+                    )}
+                  </>
+                ) : action.source?.type === 'SIRI' ? (
+                  <div className="source-row">
+                    <span className="detail-label">Source</span>
+                    <span className="detail-value">Via Siri</span>
+                  </div>
+                ) : (
+                  <div className="source-row">
+                    <span className="detail-label">Source</span>
+                    <span className="detail-value">Manually entered</span>
+                  </div>
+                )}
+              </div>
+
               {action.suggestedAction && (
                 <div className="action-detail-suggested">
                   <span className="detail-label">Next step:</span>
@@ -514,12 +567,9 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                   </button>
                   <button
                     className="btn btn-secondary followup-nudge-btn"
-                    onClick={async () => {
-                      const dateStr = prompt('Reschedule to (YYYY-MM-DD):')
-                      if (!dateStr) return
-                      await updateAction(action.id, { dueDate: dateStr, version: action.version })
-                      loadAction()
-                      onUpdate()
+                    onClick={() => {
+                      setShowDatePicker('reschedule')
+                      setDatePickerValue('')
                     }}
                   >
                     Reschedule
@@ -538,6 +588,48 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                     Archive
                   </button>
                 </div>
+              </div>
+            )}
+
+            {showDatePicker && (
+              <div className="date-picker-inline">
+                <span className="date-picker-label">
+                  {showDatePicker === 'defer' ? 'Defer until:' : 'Reschedule to:'}
+                </span>
+                <input
+                  type="date"
+                  className="form-input"
+                  value={datePickerValue}
+                  onChange={(e) => setDatePickerValue(e.target.value)}
+                  style={{ padding: '8px 10px', fontSize: '13px', flex: 1, minWidth: 0 }}
+                />
+                <button
+                  className="btn btn-primary btn-sm"
+                  disabled={!datePickerValue}
+                  onClick={async () => {
+                    if (showDatePicker === 'defer') {
+                      await confirmDefer()
+                    } else if (showDatePicker === 'reschedule' && action) {
+                      try {
+                        await updateAction(action.id, { dueDate: datePickerValue, version: action.version })
+                        setShowDatePicker(null)
+                        setDatePickerValue('')
+                        loadAction()
+                        onUpdate()
+                      } catch (err) {
+                        alert('Failed to reschedule')
+                      }
+                    }
+                  }}
+                >
+                  Confirm
+                </button>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => { setShowDatePicker(null); setDatePickerValue('') }}
+                >
+                  Cancel
+                </button>
               </div>
             )}
 
@@ -605,24 +697,90 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
               <div className="feedback-panel">
                 <p className="feedback-title">What was wrong?</p>
                 <div className="feedback-options">
-                  <button
-                    className="feedback-option"
-                    onClick={() => {
-                      const correction = prompt('What should the urgency be?')
-                      handleFeedback('urgency_incorrect', correction || undefined)
-                    }}
-                  >
-                    Wrong urgency level
-                  </button>
-                  <button
-                    className="feedback-option"
-                    onClick={() => {
-                      const correction = prompt('Which container should this be in?')
-                      handleFeedback('container_incorrect', correction || undefined)
-                    }}
-                  >
-                    Wrong container
-                  </button>
+                  {feedbackPicker === 'urgency' ? (
+                    <div className="feedback-picker-inline">
+                      <label className="feedback-picker-label">Correct urgency:</label>
+                      <select
+                        className="form-select feedback-picker-select"
+                        value={feedbackPickerValue}
+                        onChange={(e) => setFeedbackPickerValue(e.target.value)}
+                      >
+                        <option value="">Select urgency...</option>
+                        <option value="CRITICAL">Critical</option>
+                        <option value="HIGH">High</option>
+                        <option value="MEDIUM">Medium</option>
+                        <option value="LOW">Low</option>
+                      </select>
+                      <div className="feedback-picker-actions">
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => { setFeedbackPicker(null); setFeedbackPickerValue('') }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          disabled={!feedbackPickerValue}
+                          onClick={() => {
+                            handleFeedback('urgency_incorrect', feedbackPickerValue)
+                            setFeedbackPicker(null)
+                            setFeedbackPickerValue('')
+                          }}
+                        >
+                          Submit
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      className="feedback-option"
+                      onClick={() => { setFeedbackPicker('urgency'); setFeedbackPickerValue('') }}
+                    >
+                      Wrong urgency level
+                    </button>
+                  )}
+                  {feedbackPicker === 'container' ? (
+                    <div className="feedback-picker-inline">
+                      <label className="feedback-picker-label">Correct container:</label>
+                      <select
+                        className="form-select feedback-picker-select"
+                        value={feedbackPickerValue}
+                        onChange={(e) => setFeedbackPickerValue(e.target.value)}
+                      >
+                        <option value="">Select container...</option>
+                        <option value="ACTIONABLE_NOW">Now</option>
+                        <option value="CANDIDATES">Review</option>
+                        <option value="AMBIGUITY">Clarify</option>
+                        <option value="WAITING">Waiting</option>
+                      </select>
+                      <div className="feedback-picker-actions">
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => { setFeedbackPicker(null); setFeedbackPickerValue('') }}
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          className="btn btn-primary btn-sm"
+                          disabled={!feedbackPickerValue}
+                          onClick={() => {
+                            handleFeedback('container_incorrect', feedbackPickerValue)
+                            setFeedbackPicker(null)
+                            setFeedbackPickerValue('')
+                          }}
+                        >
+                          Submit
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      className="feedback-option"
+                      onClick={() => { setFeedbackPicker('container'); setFeedbackPickerValue('') }}
+                    >
+                      Wrong container
+                    </button>
+                  )}
                   <button
                     className="feedback-option"
                     onClick={() => {
@@ -944,6 +1102,71 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
           .reclassify-option--current {
             opacity: 0.35;
             cursor: default;
+          }
+          .action-detail-source {
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 8px 12px;
+            margin-bottom: 12px;
+          }
+          .source-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+          }
+          .source-row:last-child {
+            border-bottom: none;
+          }
+          .source-gmail-link {
+            color: var(--accent);
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+          }
+          .source-gmail-link:hover {
+            text-decoration: underline;
+          }
+          .date-picker-inline {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            background: var(--bg-card);
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 12px;
+          }
+          .date-picker-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+          }
+          .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+          }
+          .feedback-picker-inline {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding: 10px 12px;
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 6px;
+          }
+          .feedback-picker-label {
+            font-size: 13px;
+            color: var(--text-secondary);
+          }
+          .feedback-picker-select {
+            font-size: 13px;
+            padding: 8px 10px;
+          }
+          .feedback-picker-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
           }
         `}</style>
       </div>

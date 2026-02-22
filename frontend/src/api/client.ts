@@ -1,4 +1,4 @@
-import { Action, Container, ContainerCounts, Urgency } from '../types'
+import { Action, Container, ContainerCounts, FlagCounts, Urgency } from '../types'
 
 const API_BASE = '/api'
 
@@ -388,11 +388,18 @@ export async function createGroup(input: CreateGroupInput): Promise<GroupDetail>
 
 export async function updateGroup(
   id: number,
-  input: { name?: string; description?: string }
+  input: { name?: string; description?: string; archivedAt?: string | null }
 ): Promise<GroupDetail> {
   return request<GroupDetail>(`/groups/${id}`, {
     method: 'PUT',
     body: JSON.stringify(input)
+  })
+}
+
+export async function archiveGroup(id: number): Promise<GroupDetail> {
+  return request<GroupDetail>(`/groups/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ archivedAt: new Date().toISOString() })
   })
 }
 
@@ -571,5 +578,37 @@ export async function submitTuningFeedback(
   return request<{ success: boolean; rule: TuningRule }>('/tuning/feedback', {
     method: 'POST',
     body: JSON.stringify({ actionId, feedbackType, correction })
+  })
+}
+
+// Flag counts endpoint
+export async function getFlagCounts(): Promise<FlagCounts> {
+  return request<FlagCounts>('/containers/flag-counts')
+}
+
+// Flag-filtered actions
+export async function getActionsByFlag(flag: 'needsClarification' | 'needsTuning'): Promise<Action[]> {
+  return request<Action[]>(`/actions?${flag}=true`)
+}
+
+// Bulk action endpoints
+export async function bulkCompleteActions(ids: number[]): Promise<{ completed: number }> {
+  return request<{ completed: number }>('/actions/bulk/complete', {
+    method: 'POST',
+    body: JSON.stringify({ ids })
+  })
+}
+
+export async function bulkDeleteActions(ids: number[]): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>('/actions/bulk/delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids })
+  })
+}
+
+export async function bulkMoveActions(ids: number[], container: string): Promise<{ moved: number }> {
+  return request<{ moved: number }>('/actions/bulk/move', {
+    method: 'POST',
+    body: JSON.stringify({ ids, container })
   })
 }

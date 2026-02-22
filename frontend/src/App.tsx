@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import ContainerNav from './components/ContainerNav'
+import ContainerNav, { refreshCounts } from './components/ContainerNav'
 import Feed from './pages/Feed'
 import Settings from './pages/Settings'
 import Search from './pages/Search'
@@ -11,6 +11,7 @@ import { getSystemHealth, SystemHealth } from './api/client'
 
 function App() {
   const [activeContainer, setActiveContainer] = useState<Container | null>('ACTIONABLE_NOW')
+  const [flagFilter, setFlagFilter] = useState<'needsClarification' | 'needsTuning' | undefined>(undefined)
   const [showSettings, setShowSettings] = useState(false)
   const [showSearch, setShowSearch] = useState(false)
   const [showGroups, setShowGroups] = useState(false)
@@ -38,6 +39,7 @@ function App() {
 
   function handleRefresh() {
     setRefreshKey(k => k + 1)
+    refreshCounts()
   }
 
   function handleSearchSelect(actionId: number) {
@@ -49,8 +51,14 @@ function App() {
     if (container === 'TUNING') {
       setShowTuning(true)
     } else {
+      setFlagFilter(undefined) // Clear flag filter when switching containers
       setActiveContainer(container)
     }
+  }
+
+  function handleFlagFilter(flag: 'needsClarification' | 'needsTuning') {
+    setActiveContainer(null) // Deselect container
+    setFlagFilter(flag)
   }
 
   return (
@@ -100,10 +108,12 @@ function App() {
         <ContainerNav
           activeContainer={activeContainer}
           onContainerChange={handleContainerChange}
+          onFlagFilter={handleFlagFilter}
         />
         <Feed
           key={refreshKey}
           activeContainer={activeContainer}
+          flagFilter={flagFilter}
         />
       </main>
 
