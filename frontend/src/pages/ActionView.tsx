@@ -373,6 +373,13 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             <div className="action-detail-content">
               <div className="action-detail-description">{action.description}</div>
 
+              {action.needsClarification && action.aiReasoning && (
+                <div className="clarification-banner">
+                  <div className="clarification-title">Needs clarification</div>
+                  <div className="clarification-detail">{action.aiReasoning}</div>
+                </div>
+              )}
+
               {/* Source attribution */}
               <div className="action-detail-source">
                 {action.source?.type === 'GMAIL' ? (
@@ -848,6 +855,24 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             font-size: 17px;
             line-height: 1.5;
             margin-bottom: 12px;
+          }
+          .clarification-banner {
+            background: rgba(251, 191, 36, 0.1);
+            border: 1px solid rgba(251, 191, 36, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 12px;
+          }
+          .clarification-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--warning);
+            margin-bottom: 4px;
+          }
+          .clarification-detail {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.4;
           }
           .action-detail-suggested {
             font-size: 14px;

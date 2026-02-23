@@ -78,9 +78,6 @@ export default function ContainerNav({ activeContainer, onContainerChange, onFla
       {btn('ACTIONABLE_NOW', 'now')}
       <div className="grid-row">
         {btn('CANDIDATES', 'review')}
-        {btn('AMBIGUITY', 'clarify')}
-      </div>
-      <div className="grid-row">
         {btn('WAITING', 'waiting')}
       </div>
       {(flagCounts.needsClarification > 0 || flagCounts.needsTuning > 0) && (
