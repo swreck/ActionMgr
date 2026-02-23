@@ -20,6 +20,10 @@ cd frontend && npm run dev
 
 Frontend proxies `/api/*` to the backend via Vite config.
 
+## Railway (production)
+
+Railway CLI is installed and linked to the "exciting-solace" project. Use `railway logs`, `railway status`, etc. directly — don't ask the user to check the dashboard or copy logs.
+
 ## Key commands
 
 ```bash
@@ -107,54 +111,54 @@ These were observed during initial Gmail scan triage. Each should eventually bec
 2. **Community broadcasts** — Nextdoor, mailing lists, "does anyone know..." emails. Not directed at user specifically. Signal: mailing list headers, neighborhood/community sender domains.
 3. **Self-addressed actions** — AI suggests "report issues to Ken at krosen@..." where Ken is the user. If the action recipient matches the user's own email, it's a misparse. Signal: suggested next step contains user's own email address.
 4. **Already-completed thread actions** — Long email threads where commitments were made and fulfilled before the scan. No easy automated fix; requires user triage. Consider a post-scan review UI rather than dumping all into Candidates.
-5. **Source attribution missing in UI** — Action detail view doesn't show the email subject/sender it came from. User can't make good triage decisions without seeing the source. TODO: add source email metadata to ActionView.
-6. **Thread deduplication** — Multiple emails from the same thread generate separate actions. Scanner should group by thread ID and only parse the most recent message per thread, or deduplicate by subject/sender.
-9. **"No actionable commitment" bug** — Scanner creates an action even when the AI explicitly says no commitment was found, using that phrase as the description. Fix: in the scanner, skip action creation if `confidence < 0.3` or if description matches "no actionable commitment" (case-insensitive). This is a code bug, not a tuning issue.
-8. **Newsletter/digest false positives** — Newsletters and digests contain no personal commitments but the AI parses their content as actions. Signal: no "next step" generated, sender is a mailing list or publication. Should be filtered before AI parsing, not after.
-7. **Bulk actions** — User regularly selects 5-15 items at once in email triage.
-10. **Date entry UX** — Defer, due date, and any other date inputs currently use a plain text prompt (type YYYY-MM-DD). Should be replaced with a native date picker throughout.
-12. **Feedback input should be a picker** — Urgency correction prompt uses free text input. Should be a picker showing the 4 known urgency values. Same applies to container correction (show the 5 container options).
-14. **Tuning rule title is generic** — Rules created from user feedback are titled "Feedback on action #N" instead of something meaningful like the action description. Should use the action description as context in the title.
-15. **Tuning rule cards don't expand / no delete access** — Items in the Tuning page don't open a detail view, so there's no way to access the ⋯ menu or delete them from the UI. Need either an expand/detail view or inline delete on tuning rule cards.
-13. **TUNING should be a flag, not a container** — Currently TUNING is a Container enum value, so flagging an action for AI feedback removes it from the user's active view. Correct fix: remove TUNING from the Container enum, add a boolean `isFlagged` field to Action, and apply the user's correction immediately (update urgency/container in place) while creating the tuning rule. The action stays visible and actionable. This is a schema change (migration required) and affects routes, frontend types, and ContainerNav.
-11. **Container badge stale after move** — After reclassifying an action, the nav badge counts take ~10 seconds to update. Should invalidate and refetch counts immediately after any container change. Need a multi-select mode on the feed (checkbox per card, select-all, then bulk Complete / Delete / Move). This is especially important for post-scan triage sessions.
+5. ~~**Source attribution missing in UI**~~ — DONE (v2). Detail view shows sender/subject/date + "View in Gmail" link.
+6. ~~**Thread deduplication**~~ — DONE (v2). Scanner checks for existing action with same threadId or similar description/sender.
+9. ~~**"No actionable commitment" bug**~~ — DONE (v2). Scanner skips if commitmentConfidence < 0.3 or description matches.
+8. ~~**Newsletter/digest false positives**~~ — DONE (v2.3). Expanded pre-filter with mailing list headers (List-Unsubscribe, List-Id, Precedence), 28 skip patterns, automated sender prefixes.
+7. ~~**Bulk actions**~~ — DONE (v2). Multi-select mode on feed with bulk Complete/Delete/Move.
+10. ~~**Date entry UX**~~ — DONE (v2). Native date pickers throughout.
+12. ~~**Feedback input should be a picker**~~ — DONE (v2). Dropdown for urgency (4 values) and container (4 containers).
+14. ~~**Tuning rule title is generic**~~ — DONE (v2). Uses action description as title.
+15. ~~**Tuning rule cards don't expand / no delete access**~~ — DONE (v2). Expandable detail view + inline delete.
+13. ~~**TUNING should be a flag, not a container**~~ — DONE (v2). needsTuning boolean flag, action stays in its container.
+11. ~~**Container badge stale after move**~~ — DONE (v2). Immediate refetch after container changes.
 
 ## v2 Punch List (approved for build)
 
 Priority order: schema → categorization → flags → UI → groups. Each item marked [ ] pending, [x] done.
 
 ### Schema changes
-- [ ] P1: Remove TUNING from Container enum
-- [ ] P2: Add `needsClarification` Boolean to Action (default false)
-- [ ] P3: Add `needsTuning` Boolean to Action (default false)
-- [ ] P4: Add `commitmentConfidence` Float to Action (alongside existing `confidence` which becomes parseConfidence)
-- [ ] P5: Add `archivedAt` DateTime? to ActionGroup (for completed groups)
-- [ ] P6: Run db:push after all schema changes
+- [x] P1: Remove TUNING from Container enum
+- [x] P2: Add `needsClarification` Boolean to Action (default false)
+- [x] P3: Add `needsTuning` Boolean to Action (default false)
+- [x] P4: Add `commitmentConfidence` Float to Action (alongside existing `confidence` which becomes parseConfidence)
+- [x] P5: Add `archivedAt` DateTime? to ActionGroup (for completed groups)
+- [x] P6: Run db:push after all schema changes
 
 ### Categorization / routing fixes
-- [ ] P7: Auto-route by due date: if dueDate >21 days out → WAITING + auto-create DATE_EXACT trigger (set triggerDate to 21 days before dueDate)
-- [ ] P8: Vague date resolution: "April" = April 1, "2027" = Jan 1, "Fall" = Sept 21, etc. — enforce in parser
-- [ ] P9: Enforce real triggerDate on all date triggers (no prose-only descriptions without computable date)
-- [ ] P10: Split confidence: AI returns commitmentConfidence + parseConfidence. Route/filter based on commitmentConfidence
-- [ ] P11: Manual input confirm → goes directly to AI-suggested container (not always CANDIDATES)
-- [ ] P12: Kill "no actionable commitment" bug: skip action creation in scanner if description matches or commitmentConfidence < 0.3
-- [ ] P13: Gmail thread deduplication: check for existing action with same threadId or similar description/sender before creating
+- [x] P7: Auto-route by due date: if dueDate >21 days out → WAITING + auto-create DATE_EXACT trigger (set triggerDate to 21 days before dueDate)
+- [x] P8: Vague date resolution: "April" = April 1, "2027" = Jan 1, "Fall" = Sept 21, etc. — enforce in parser
+- [x] P9: Enforce real triggerDate on all date triggers (no prose-only descriptions without computable date)
+- [x] P10: Split confidence: AI returns commitmentConfidence + parseConfidence. Route/filter based on commitmentConfidence
+- [x] P11: Manual input confirm → goes directly to AI-suggested container (not always CANDIDATES)
+- [x] P12: Kill "no actionable commitment" bug: skip action creation in scanner if description matches or commitmentConfidence < 0.3
+- [x] P13: Gmail thread deduplication: check for existing action with same threadId or similar description/sender before creating
 - [ ] P14: Ongoing dedup detection: when new action looks like existing one, flag with needsClarification and ask user
 
 ### Clarify / Tuning flag migration
-- [ ] P15: Clarify = flag (needsClarification), not container. Action stays in NOW/WAITING. Clarify badge shows count of flagged actions
-- [ ] P16: Tuning = flag (needsTuning), not container. Action stays in its container. Tuning badge shows count of flagged actions
-- [ ] P17: Feedback on action: apply correction immediately (update urgency/container in place), set needsTuning=true, create tuning rule with action description as title
-- [ ] P18: WAITING safety net: scheduler checks for WAITING actions with no trigger or no triggerDate → set needsClarification=true
+- [x] P15: Clarify = flag (needsClarification), not container. Action stays in NOW/WAITING. Clarify badge shows count of flagged actions
+- [x] P16: Tuning = flag (needsTuning), not container. Action stays in its container. Tuning badge shows count of flagged actions
+- [x] P17: Feedback on action: apply correction immediately (update urgency/container in place), set needsTuning=true, create tuning rule with action description as title
+- [x] P18: WAITING safety net: scheduler checks for WAITING actions with no trigger or no triggerDate → set needsClarification=true
 
 ### UI fixes
-- [ ] P19: Source attribution: show sender/subject/date inline on Gmail-sourced action cards + "View in Gmail" link in detail view
-- [ ] P20: Bulk actions: multi-select mode on feed (checkbox per card, select-all, bulk Complete/Delete/Move)
-- [ ] P21: Date pickers: replace all YYYY-MM-DD text inputs with native date pickers
-- [ ] P22: Feedback pickers: dropdown for urgency correction (4 values) and container correction (4 containers)
-- [ ] P23: Badge staleness: refetch container counts immediately after any container change (not 30s polling)
-- [ ] P24: Tuning rule titles: use action description instead of "Feedback on action #N"
-- [ ] P25: Tuning rule cards: expandable detail view + inline delete button
+- [x] P19: Source attribution: show sender/subject/date inline on Gmail-sourced action cards + "View in Gmail" link in detail view
+- [x] P20: Bulk actions: multi-select mode on feed (checkbox per card, select-all, bulk Complete/Delete/Move)
+- [x] P21: Date pickers: replace all YYYY-MM-DD text inputs with native date pickers
+- [x] P22: Feedback pickers: dropdown for urgency correction (4 values) and container correction (4 containers)
+- [x] P23: Badge staleness: refetch container counts immediately after any container change (not 30s polling)
+- [x] P24: Tuning rule titles: use action description instead of "Feedback on action #N"
+- [x] P25: Tuning rule cards: expandable detail view + inline delete button
 - [ ] P26: Audit and fix inconsistent UI patterns (same action done multiple ways = bug)
 
 ### Action Groups enhancements
@@ -164,6 +168,15 @@ Priority order: schema → categorization → flags → UI → groups. Each item
 - [ ] P30: Quick remove (X) on actions within a group
 - [ ] P31: Progress indicator per group ("3 of 6 complete")
 - [ ] P32: Completing all actions → archive group (set archivedAt, preserve history)
+
+### v2.3 additions (completed)
+- [x] Gmail pre-filter: expanded skip patterns, mailing list header detection, automated sender prefixes
+- [x] Feed card density: AI-generated `shortDescription` field, removed suggestedAction from feed cards
+- [x] Text selection: user-select on description without triggering card navigation
+- [x] Swipe left to delete: touch gesture on action cards
+- [x] Location-aware parsing: location triggers suggest Apple Reminders
+- [x] Intelligent clarification: `missingInfo` stored on Action, shown in detail view; parser excludes contact info from missingInfo
+- [x] Nav cleanup: removed AMBIGUITY container button, flag badges appear only when count > 0
 
 ### Tuning Option A (FUTURE — do not build now, hold for next session)
 - Behavioral learning: track reclassify/delete/urgency-change as learning signals
