@@ -165,7 +165,7 @@ Guidelines:
    - "every year" or "annually" → FREQ=YEARLY;INTERVAL=1
    - "every year in November" → FREQ=YEARLY;INTERVAL=1;BYMONTH=11
    - "every 90 days" → FREQ=DAILY;INTERVAL=90
-   - Only set recurrenceRule when recurrence is explicitly stated
+   - Set recurrenceRule when the text indicates a repeating pattern — whether stated as a command ("do this every month"), as a frequency word ("send quarterly statements", "monthly review", "weekly call"), or as an implied schedule. If the action describes something that happens on a recurring basis, set the rule.
    - When setting recurrenceRule, also set leadTimeDays: weekly=1, monthly=3, quarterly=7, yearly=21
 10. Vague date resolution — when the user gives a vague time reference, resolve to the first day of that unit:
    - "April" → April 1 of the current year (or next year if April has already passed)

@@ -46,6 +46,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
   const [datePickerValue, setDatePickerValue] = useState('')
   const [feedbackPicker, setFeedbackPicker] = useState<'urgency' | 'container' | null>(null)
   const [feedbackPickerValue, setFeedbackPickerValue] = useState('')
+  const [showRecurrencePicker, setShowRecurrencePicker] = useState(false)
 
   useEffect(() => {
     loadAction()
@@ -510,12 +511,50 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                     </span>
                   </div>
                 )}
-                {action.recurrenceRule && (
-                  <div className="detail-row">
-                    <span className="detail-label">Repeats</span>
-                    <span className="detail-value">
-                      ↻ {formatRecurrenceLabel(action.recurrenceRule)}
-                    </span>
+                <div className="detail-row">
+                  <span className="detail-label">Repeats</span>
+                  <span
+                    className="detail-value detail-value-editable"
+                    onClick={() => setShowRecurrencePicker(!showRecurrencePicker)}
+                  >
+                    {action.recurrenceRule
+                      ? `↻ ${formatRecurrenceLabel(action.recurrenceRule)}`
+                      : 'None'}
+                  </span>
+                </div>
+                {showRecurrencePicker && (
+                  <div className="recurrence-picker-inline">
+                    <div className="picker-grid picker-grid--3col">
+                      {([
+                        { label: 'Weekly', rule: 'FREQ=WEEKLY;INTERVAL=1', lead: 1 },
+                        { label: 'Biweekly', rule: 'FREQ=WEEKLY;INTERVAL=2', lead: 1 },
+                        { label: 'Monthly', rule: 'FREQ=MONTHLY;INTERVAL=1', lead: 3 },
+                        { label: 'Quarterly', rule: 'FREQ=MONTHLY;INTERVAL=3', lead: 7 },
+                        { label: 'Yearly', rule: 'FREQ=YEARLY;INTERVAL=1', lead: 21 },
+                        { label: 'None', rule: null as string | null, lead: 21 },
+                      ] as const).map(opt => (
+                        <button
+                          key={opt.label}
+                          className={`picker-grid-btn${action.recurrenceRule === opt.rule ? ' picker-grid-btn--current' : ''}`}
+                          disabled={action.recurrenceRule === opt.rule || (!action.recurrenceRule && opt.rule === null)}
+                          onClick={async () => {
+                            try {
+                              await updateAction(action.id, {
+                                recurrenceRule: opt.rule,
+                                version: action.version
+                              })
+                              setShowRecurrencePicker(false)
+                              loadAction()
+                              onUpdate()
+                            } catch (err) {
+                              console.error('Failed to update recurrence:', err)
+                            }
+                          }}
+                        >
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {action.recurrenceRule && (
@@ -1216,6 +1255,12 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             grid-template-columns: 1fr 1fr;
             gap: 8px;
             margin-bottom: 4px;
+          }
+          .picker-grid--3col {
+            grid-template-columns: 1fr 1fr 1fr;
+          }
+          .recurrence-picker-inline {
+            padding: 8px 0 4px;
           }
           .picker-grid-btn {
             padding: 12px;

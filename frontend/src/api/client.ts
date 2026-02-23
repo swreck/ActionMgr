@@ -56,6 +56,7 @@ export interface UpdateActionInput {
   dueDate?: string | null
   container?: Container
   leadTimeDays?: number
+  recurrenceRule?: string | null
   version: number
 }
 

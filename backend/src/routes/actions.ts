@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { Container, Urgency, Prisma } from '@prisma/client'
 import { prisma } from '../index'
-import { calculateNextDate } from '../services/recurrence'
+import { calculateNextDate, suggestLeadTimeDays } from '../services/recurrence'
 
 const router = Router()
 
@@ -452,7 +452,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = parseInt(req.params.id as string)
-    const { version, description, suggestedAction, urgency, dueDate, container, needsClarification, needsTuning, leadTimeDays } = req.body
+    const { version, description, suggestedAction, urgency, dueDate, container, needsClarification, needsTuning, leadTimeDays, recurrenceRule } = req.body
 
     // Check version for optimistic concurrency
     const existing = await prisma.action.findUnique({ where: { id } })
@@ -481,6 +481,13 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
     if (needsClarification !== undefined) updateData.needsClarification = needsClarification
     if (needsTuning !== undefined) updateData.needsTuning = needsTuning
     if (leadTimeDays !== undefined) updateData.leadTimeDays = leadTimeDays
+    if (recurrenceRule !== undefined) {
+      updateData.recurrenceRule = recurrenceRule || null
+      // Auto-set leadTimeDays when recurrence changes (unless user explicitly set it in same request)
+      if (leadTimeDays === undefined && recurrenceRule) {
+        updateData.leadTimeDays = suggestLeadTimeDays(recurrenceRule)
+      }
+    }
 
     const action = await prisma.action.update({
       where: { id },
