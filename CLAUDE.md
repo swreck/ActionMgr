@@ -143,7 +143,7 @@ Priority order: schema → categorization → flags → UI → groups. Each item
 - [x] P11: Manual input confirm → goes directly to AI-suggested container (not always CANDIDATES)
 - [x] P12: Kill "no actionable commitment" bug: skip action creation in scanner if description matches or commitmentConfidence < 0.3
 - [x] P13: Gmail thread deduplication: check for existing action with same threadId or similar description/sender before creating
-- [ ] P14: Ongoing dedup detection: when new action looks like existing one, flag with needsClarification and ask user
+- [x] P14: Ongoing dedup detection: when new action looks like existing one, flag with needsClarification and ask user
 
 ### Clarify / Tuning flag migration
 - [x] P15: Clarify = flag (needsClarification), not container. Action stays in NOW/WAITING. Clarify badge shows count of flagged actions
@@ -159,15 +159,15 @@ Priority order: schema → categorization → flags → UI → groups. Each item
 - [x] P23: Badge staleness: refetch container counts immediately after any container change (not 30s polling)
 - [x] P24: Tuning rule titles: use action description instead of "Feedback on action #N"
 - [x] P25: Tuning rule cards: expandable detail view + inline delete button
-- [ ] P26: Audit and fix inconsistent UI patterns (same action done multiple ways = bug)
+- [x] P26: Audit and fix inconsistent UI patterns (same action done multiple ways = bug)
 
 ### Action Groups enhancements
-- [ ] P27: Accepted/manual groups at top, AI-suggested groups collapsed at bottom
-- [ ] P28: Group suggestions appear as Review items (cards in CANDIDATES)
-- [ ] P29: Add actions to group via searchable checklist modal
-- [ ] P30: Quick remove (X) on actions within a group
-- [ ] P31: Progress indicator per group ("3 of 6 complete")
-- [ ] P32: Completing all actions → archive group (set archivedAt, preserve history)
+- [x] P27: Accepted/manual groups at top, AI-suggested groups collapsed at bottom
+- [x] P28: Group suggestions appear as Review items (cards in CANDIDATES)
+- [x] P29: Add actions to group via searchable checklist modal
+- [x] P30: Quick remove (X) on actions within a group
+- [x] P31: Progress indicator per group ("3 of 6 complete")
+- [x] P32: Completing all actions → archive group (set archivedAt, preserve history)
 
 ### v2.3 additions (completed)
 - [x] Gmail pre-filter: expanded skip patterns, mailing list header detection, automated sender prefixes
@@ -177,6 +177,14 @@ Priority order: schema → categorization → flags → UI → groups. Each item
 - [x] Location-aware parsing: location triggers suggest Apple Reminders
 - [x] Intelligent clarification: `missingInfo` stored on Action, shown in detail view; parser excludes contact info from missingInfo
 - [x] Nav cleanup: removed AMBIGUITY container button, flag badges appear only when count > 0
+- [x] ConfirmModal: replaced all native confirm()/prompt() with styled modal component
+- [x] Grid button pickers: unified reclassify and feedback panels to same button grid pattern
+- [x] Shared spinner: deduplicated spinner CSS from QuickCapture and AmbiguityResolver
+- [x] Dedup detection: word overlap similarity on confirm/siri/gmail with excludeId to prevent self-match
+- [x] Auto-archive groups: completing all actions in a group archives it (single + bulk complete)
+- [x] Group suggestions: GET /suggestions endpoint, banner in CANDIDATES feed
+- [x] Flag counts merged into /containers/counts response
+- [x] Select-all checkbox in add-actions-to-group modal
 
 ### Tuning Option A (FUTURE — do not build now, hold for next session)
 - Behavioral learning: track reclassify/delete/urgency-change as learning signals
