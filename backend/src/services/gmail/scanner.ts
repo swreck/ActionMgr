@@ -4,6 +4,7 @@ import { prisma } from '../../index'
 import { getAuthenticatedClient } from './auth'
 import { ParsedAction } from '../ai/parser'
 import { parseWithTuning } from '../ai/tuning-parser'
+import { findPotentialDuplicate } from '../dedup'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
@@ -376,6 +377,22 @@ async function processEmail(email: EmailContent): Promise<ParsedAction | null> {
     } catch (err) {
       console.error('Error creating party:', err)
     }
+  }
+
+  // Check for potential duplicates
+  const duplicate = await findPotentialDuplicate(prisma, parsed.description, email.from, email.subject, action.id)
+  if (duplicate) {
+    const currentMissing = parsed.missingInfo && parsed.missingInfo.length > 0 ? parsed.missingInfo : []
+    await prisma.action.update({
+      where: { id: action.id },
+      data: {
+        needsClarification: true,
+        missingInfo: JSON.stringify([
+          ...currentMissing,
+          `Possible duplicate of action #${duplicate.actionId}: "${duplicate.description.substring(0, 60)}" (${duplicate.similarity})`
+        ])
+      }
+    })
   }
 
   // Log creation event

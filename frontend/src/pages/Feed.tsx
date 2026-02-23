@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Action, Container, CONTAINER_LABELS } from '../types'
-import { getActions, getActionsByFlag, deleteAction, bulkCompleteActions, bulkDeleteActions, bulkMoveActions } from '../api/client'
+import { getActions, getActionsByFlag, deleteAction, bulkCompleteActions, bulkDeleteActions, bulkMoveActions, getGroupSuggestions, GroupSuggestion } from '../api/client'
 import ActionCard from '../components/ActionCard'
 import { refreshCounts } from '../components/ContainerNav'
 import QuickCapture from '../components/QuickCapture'
@@ -17,13 +17,15 @@ interface FeedProps {
   activeContainer: Container | null
   flagFilter?: 'needsClarification' | 'needsTuning'
   onDataChange?: () => void
+  onOpenGroups?: () => void
 }
 
-export default function Feed({ activeContainer, flagFilter, onDataChange }: FeedProps) {
+export default function Feed({ activeContainer, flagFilter, onDataChange, onOpenGroups }: FeedProps) {
   const [actions, setActions] = useState<Action[]>([])
   const [loading, setLoading] = useState(true)
   const [showCapture, setShowCapture] = useState(false)
   const [selectedActionId, setSelectedActionId] = useState<number | null>(null)
+  const [groupSuggestions, setGroupSuggestions] = useState<GroupSuggestion[]>([])
 
   // Bulk selection state
   const [selectionMode, setSelectionMode] = useState(false)
@@ -46,6 +48,18 @@ export default function Feed({ activeContainer, flagFilter, onDataChange }: Feed
       }
       setActions(data)
       onDataChange?.()
+
+      // Load group suggestions when viewing Review/CANDIDATES
+      if (activeContainer === 'CANDIDATES') {
+        try {
+          const { suggestions } = await getGroupSuggestions()
+          setGroupSuggestions(suggestions)
+        } catch {
+          setGroupSuggestions([])
+        }
+      } else {
+        setGroupSuggestions([])
+      }
     } catch (err) {
       console.error('Failed to load actions:', err)
     } finally {
@@ -184,6 +198,16 @@ export default function Feed({ activeContainer, flagFilter, onDataChange }: Feed
           </button>
         )}
       </div>
+
+      {groupSuggestions.length > 0 && onOpenGroups && (
+        <div className="group-suggestion-banner" onClick={onOpenGroups}>
+          <span className="group-suggestion-icon">📋</span>
+          <span className="group-suggestion-text">
+            {groupSuggestions.length} group {groupSuggestions.length === 1 ? 'suggestion' : 'suggestions'} available
+          </span>
+          <span className="group-suggestion-arrow">›</span>
+        </div>
+      )}
 
       {selectionMode && actions.length > 0 && (
         <div className="feed-select-all">

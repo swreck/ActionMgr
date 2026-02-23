@@ -50,6 +50,75 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
   }
 })
 
+// GET /api/groups/suggestions - Suggest groupings based on similarity
+// NOTE: Must be defined before /:id to avoid Express treating "suggestions" as an id
+router.get('/suggestions', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    // Get ungrouped actions
+    const actions = await prisma.action.findMany({
+      where: {
+        groupId: null,
+        archivedAt: null
+      },
+      select: {
+        id: true,
+        description: true,
+        rawInput: true
+      }
+    })
+
+    // Simple keyword-based grouping suggestions
+    const suggestions: Array<{
+      reason: string
+      actionIds: number[]
+      suggestedName: string
+    }> = []
+
+    // Group by common keywords
+    const keywordGroups: Record<string, number[]> = {}
+
+    for (const action of actions) {
+      const words = action.description.toLowerCase().split(/\s+/)
+      for (const word of words) {
+        // Skip common words
+        if (word.length < 4 || ['with', 'the', 'and', 'for', 'from', 'this', 'that', 'about'].includes(word)) {
+          continue
+        }
+
+        if (!keywordGroups[word]) {
+          keywordGroups[word] = []
+        }
+        if (!keywordGroups[word].includes(action.id)) {
+          keywordGroups[word].push(action.id)
+        }
+      }
+    }
+
+    // Find keywords that appear in multiple actions
+    for (const [keyword, ids] of Object.entries(keywordGroups)) {
+      if (ids.length >= 2 && ids.length <= 5) {
+        // Check if this group isn't a subset of an existing suggestion
+        const isSubset = suggestions.some(s =>
+          ids.every(id => s.actionIds.includes(id))
+        )
+
+        if (!isSubset) {
+          suggestions.push({
+            reason: `Related to "${keyword}"`,
+            actionIds: ids,
+            suggestedName: keyword.charAt(0).toUpperCase() + keyword.slice(1)
+          })
+        }
+      }
+    }
+
+    // Limit to top 5 suggestions
+    res.json({ suggestions: suggestions.slice(0, 5) })
+  } catch (err) {
+    next(err)
+  }
+})
+
 // GET /api/groups/:id - Get single group with actions
 router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -196,74 +265,6 @@ router.delete('/:id/actions/:actionId', async (req: Request, res: Response, next
     })
 
     res.json({ success: true })
-  } catch (err) {
-    next(err)
-  }
-})
-
-// POST /api/groups/suggest - Suggest groupings based on similarity
-router.post('/suggest', async (_req: Request, res: Response, next: NextFunction) => {
-  try {
-    // Get ungrouped actions
-    const actions = await prisma.action.findMany({
-      where: {
-        groupId: null,
-        archivedAt: null
-      },
-      select: {
-        id: true,
-        description: true,
-        rawInput: true
-      }
-    })
-
-    // Simple keyword-based grouping suggestions
-    const suggestions: Array<{
-      reason: string
-      actionIds: number[]
-      suggestedName: string
-    }> = []
-
-    // Group by common keywords
-    const keywordGroups: Record<string, number[]> = {}
-
-    for (const action of actions) {
-      const words = action.description.toLowerCase().split(/\s+/)
-      for (const word of words) {
-        // Skip common words
-        if (word.length < 4 || ['with', 'the', 'and', 'for', 'from', 'this', 'that', 'about'].includes(word)) {
-          continue
-        }
-
-        if (!keywordGroups[word]) {
-          keywordGroups[word] = []
-        }
-        if (!keywordGroups[word].includes(action.id)) {
-          keywordGroups[word].push(action.id)
-        }
-      }
-    }
-
-    // Find keywords that appear in multiple actions
-    for (const [keyword, ids] of Object.entries(keywordGroups)) {
-      if (ids.length >= 2 && ids.length <= 5) {
-        // Check if this group isn't a subset of an existing suggestion
-        const isSubset = suggestions.some(s =>
-          ids.every(id => s.actionIds.includes(id))
-        )
-
-        if (!isSubset) {
-          suggestions.push({
-            reason: `Related to "${keyword}"`,
-            actionIds: ids,
-            suggestedName: keyword.charAt(0).toUpperCase() + keyword.slice(1)
-          })
-        }
-      }
-    }
-
-    // Limit to top 5 suggestions
-    res.json({ suggestions: suggestions.slice(0, 5) })
   } catch (err) {
     next(err)
   }

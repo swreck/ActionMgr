@@ -7,6 +7,7 @@ import {
   ParsedAction
 } from '../services/ai/parser'
 import { parseWithTuning } from '../services/ai/tuning-parser'
+import { findPotentialDuplicate } from '../services/dedup'
 
 const router = Router()
 
@@ -163,6 +164,22 @@ router.post('/confirm', async (req: Request, res: Response, next: NextFunction) 
           }
         })
       }
+    }
+
+    // Check for potential duplicates (exclude the just-created action)
+    const duplicate = await findPotentialDuplicate(prisma, description, undefined, undefined, action.id)
+    if (duplicate) {
+      const currentMissing = missingInfo && missingInfo.length > 0 ? missingInfo : []
+      await prisma.action.update({
+        where: { id: action.id },
+        data: {
+          needsClarification: true,
+          missingInfo: JSON.stringify([
+            ...currentMissing,
+            `Possible duplicate of action #${duplicate.actionId}: "${duplicate.description.substring(0, 60)}" (${duplicate.similarity})`
+          ])
+        }
+      })
     }
 
     // Log creation event
@@ -347,6 +364,22 @@ router.post('/siri', async (req: Request, res: Response, next: NextFunction) => 
           }
         })
       }
+    }
+
+    // Check for potential duplicates (exclude the just-created action)
+    const duplicate = await findPotentialDuplicate(prisma, parsed.description, undefined, undefined, action.id)
+    if (duplicate) {
+      const currentMissing = parsed.missingInfo && parsed.missingInfo.length > 0 ? parsed.missingInfo : []
+      await prisma.action.update({
+        where: { id: action.id },
+        data: {
+          needsClarification: true,
+          missingInfo: JSON.stringify([
+            ...currentMissing,
+            `Possible duplicate of action #${duplicate.actionId}: "${duplicate.description.substring(0, 60)}" (${duplicate.similarity})`
+          ])
+        }
+      })
     }
 
     // Log creation event

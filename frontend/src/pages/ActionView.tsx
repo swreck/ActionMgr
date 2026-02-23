@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Action, Urgency, Trigger, CONTAINER_LABELS, URGENCY_LABELS } from '../types'
-import { getAction, updateAction, completeAction, moveAction, getTriggers, submitTuningFeedback, reparseAction, createTrigger, mergeActions, acknowledgeFollowUp, purgeAction, FeedbackType } from '../api/client'
+import { Action, Urgency, Container, Trigger, CONTAINER_LABELS, URGENCY_LABELS } from '../types'
+import { getAction, updateAction, completeAction, moveAction, getTriggers, submitTuningFeedback, reparseAction, createTrigger, mergeActions, acknowledgeFollowUp, purgeAction, deleteAction, FeedbackType } from '../api/client'
 import InfoPanel from '../components/InfoPanel'
 import TriggerCard from '../components/TriggerCard'
 import AddTriggerModal from '../components/AddTriggerModal'
+import ConfirmModal from '../components/ConfirmModal'
 import { formatRecurrenceLabel } from '../utils/recurrence'
 
 interface ActionViewProps {
@@ -11,6 +12,14 @@ interface ActionViewProps {
   onClose: () => void
   onUpdate: () => void
 }
+
+type ConfirmState =
+  | null
+  | { type: 'delete' }
+  | { type: 'archive' }
+  | { type: 'merge-id' }
+  | { type: 'merge-confirm'; primaryId: number }
+  | { type: 'text-correction' }
 
 export default function ActionView({ actionId, onClose, onUpdate }: ActionViewProps) {
   const [action, setAction] = useState<Action | null>(null)
@@ -24,6 +33,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
   const [nextCreatedMsg, setNextCreatedMsg] = useState<string | null>(null)
   const [editingLeadTime, setEditingLeadTime] = useState(false)
   const [leadTimeValue, setLeadTimeValue] = useState('')
+  const [confirmState, setConfirmState] = useState<ConfirmState>(null)
 
   // Edit form state
   const [description, setDescription] = useState('')
@@ -75,7 +85,6 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
       onUpdate()
     } catch (err) {
       console.error('Failed to save:', err)
-      alert('Failed to save changes')
     } finally {
       setSaving(false)
     }
@@ -100,7 +109,6 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
       onUpdate()
     } catch (err) {
       console.error('Failed to reparse:', err)
-      alert('Failed to re-parse action')
     } finally {
       setReparsing(false)
     }
@@ -196,7 +204,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
       loadAction()
       onUpdate()
     } catch (err) {
-      alert('Failed to defer action')
+      console.error('Failed to defer action:', err)
     }
   }
 
@@ -205,7 +213,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
     setShowMenu(false)
   }
 
-  async function doReclassify(container: 'ACTIONABLE_NOW' | 'CANDIDATES' | 'AMBIGUITY' | 'WAITING') {
+  async function doReclassify(container: Container) {
     if (!action) return
     try {
       await moveAction(action.id, container)
@@ -213,42 +221,80 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
       loadAction()
       onUpdate()
     } catch (err) {
-      alert('Failed to reclassify action')
+      console.error('Failed to reclassify action:', err)
     }
   }
 
-  async function handleDelete() {
-    if (!action) return
-    if (!confirm(`Permanently delete "${action.description.substring(0, 60)}"? This cannot be undone.`)) return
+  function handleDeleteClick() {
+    setShowMenu(false)
+    setConfirmState({ type: 'delete' })
+  }
 
+  async function executeDelete() {
+    if (!action) return
     try {
       await purgeAction(action.id)
       onUpdate()
       onClose()
     } catch (err) {
-      alert('Failed to delete action')
+      console.error('Failed to delete action:', err)
     }
-    setShowMenu(false)
+    setConfirmState(null)
   }
 
-  async function handleMerge() {
+  function handleMergeClick() {
+    setShowMenu(false)
+    setConfirmState({ type: 'merge-id' })
+  }
+
+  async function executeMerge(primaryId: number) {
     if (!action) return
-    const idStr = prompt('Enter the ID of the action to merge this into:')
-    if (!idStr) return
-    const primaryId = parseInt(idStr)
-    if (isNaN(primaryId)) { alert('Invalid ID'); return }
-
-    if (!confirm(`Merge this action into action #${primaryId}? This cannot be undone.`)) return
-
     try {
       await mergeActions(primaryId, action.id)
       onUpdate()
       onClose()
     } catch (err) {
-      alert('Failed to merge actions')
+      console.error('Failed to merge actions:', err)
     }
-    setShowMenu(false)
+    setConfirmState(null)
   }
+
+  async function executeArchive() {
+    if (!action) return
+    try {
+      await deleteAction(action.id)
+      onUpdate()
+      onClose()
+    } catch (err) {
+      console.error('Failed to archive action:', err)
+    }
+    setConfirmState(null)
+  }
+
+  function handleConfirmAction(inputValue?: string) {
+    if (!confirmState) return
+
+    if (confirmState.type === 'delete') {
+      executeDelete()
+    } else if (confirmState.type === 'archive') {
+      executeArchive()
+    } else if (confirmState.type === 'merge-id') {
+      const id = parseInt(inputValue || '')
+      if (isNaN(id)) return
+      setConfirmState({ type: 'merge-confirm', primaryId: id })
+    } else if (confirmState.type === 'merge-confirm') {
+      executeMerge(confirmState.primaryId)
+    } else if (confirmState.type === 'text-correction') {
+      if (inputValue?.trim()) {
+        handleFeedback('parsed_wrong', inputValue.trim())
+      }
+      setConfirmState(null)
+    }
+  }
+
+  // Containers available for reclassify and feedback — same grid buttons in both
+  const containerOptions: Container[] = ['ACTIONABLE_NOW', 'CANDIDATES', 'AMBIGUITY', 'WAITING']
+  const urgencyOptions: Urgency[] = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
 
   if (loading) {
     return (
@@ -301,9 +347,9 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                 <div className="action-menu">
                   <button className="action-menu-item" onClick={handleDefer}>Defer</button>
                   <button className="action-menu-item" onClick={handleReclassify}>Reclassify</button>
-                  <button className="action-menu-item" onClick={handleMerge}>Merge</button>
+                  <button className="action-menu-item" onClick={handleMergeClick}>Merge</button>
                   <button className="action-menu-item" onClick={() => { setShowAddTrigger(true); setShowMenu(false) }}>Add to Waiting</button>
-                  <button className="action-menu-item action-menu-item--danger" onClick={handleDelete}>Delete</button>
+                  <button className="action-menu-item action-menu-item--danger" onClick={handleDeleteClick}>Delete</button>
                 </div>
               )}
             </div>
@@ -571,15 +617,8 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                     Reschedule
                   </button>
                   <button
-                    className="btn btn-secondary followup-nudge-btn"
-                    style={{ color: 'var(--text-secondary)' }}
-                    onClick={async () => {
-                      if (!confirm('Archive this action?')) return
-                      const { deleteAction } = await import('../api/client')
-                      await deleteAction(action.id)
-                      onUpdate()
-                      onClose()
-                    }}
+                    className="btn btn-secondary followup-nudge-btn followup-archive-btn"
+                    onClick={() => setConfirmState({ type: 'archive' })}
                   >
                     Archive
                   </button>
@@ -613,7 +652,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                         loadAction()
                         onUpdate()
                       } catch (err) {
-                        alert('Failed to reschedule')
+                        console.error('Failed to reschedule:', err)
                       }
                     }
                   }}
@@ -671,17 +710,18 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                   {feedbackPicker === 'urgency' ? (
                     <div className="feedback-picker-inline">
                       <label className="feedback-picker-label">Correct urgency:</label>
-                      <select
-                        className="form-select feedback-picker-select"
-                        value={feedbackPickerValue}
-                        onChange={(e) => setFeedbackPickerValue(e.target.value)}
-                      >
-                        <option value="">Select urgency...</option>
-                        <option value="CRITICAL">Critical</option>
-                        <option value="HIGH">High</option>
-                        <option value="MEDIUM">Medium</option>
-                        <option value="LOW">Low</option>
-                      </select>
+                      <div className="picker-grid">
+                        {urgencyOptions.map(u => (
+                          <button
+                            key={u}
+                            className={`picker-grid-btn${feedbackPickerValue === u ? ' picker-grid-btn--selected' : ''}${action.urgency === u ? ' picker-grid-btn--current' : ''}`}
+                            onClick={() => setFeedbackPickerValue(u)}
+                            disabled={action.urgency === u}
+                          >
+                            {URGENCY_LABELS[u]}
+                          </button>
+                        ))}
+                      </div>
                       <div className="feedback-picker-actions">
                         <button
                           className="btn btn-secondary btn-sm"
@@ -713,17 +753,18 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                   {feedbackPicker === 'container' ? (
                     <div className="feedback-picker-inline">
                       <label className="feedback-picker-label">Correct container:</label>
-                      <select
-                        className="form-select feedback-picker-select"
-                        value={feedbackPickerValue}
-                        onChange={(e) => setFeedbackPickerValue(e.target.value)}
-                      >
-                        <option value="">Select container...</option>
-                        <option value="ACTIONABLE_NOW">Now</option>
-                        <option value="CANDIDATES">Review</option>
-                        <option value="AMBIGUITY">Clarify</option>
-                        <option value="WAITING">Waiting</option>
-                      </select>
+                      <div className="picker-grid">
+                        {containerOptions.map(c => (
+                          <button
+                            key={c}
+                            className={`picker-grid-btn${feedbackPickerValue === c ? ' picker-grid-btn--selected' : ''}${action.container === c ? ' picker-grid-btn--current' : ''}`}
+                            onClick={() => setFeedbackPickerValue(c)}
+                            disabled={action.container === c}
+                          >
+                            {CONTAINER_LABELS[c]}
+                          </button>
+                        ))}
+                      </div>
                       <div className="feedback-picker-actions">
                         <button
                           className="btn btn-secondary btn-sm"
@@ -754,10 +795,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                   )}
                   <button
                     className="feedback-option"
-                    onClick={() => {
-                      const correction = prompt('What should it say?')
-                      handleFeedback('parsed_wrong', correction || undefined)
-                    }}
+                    onClick={() => setConfirmState({ type: 'text-correction' })}
                   >
                     Parsed text is wrong
                   </button>
@@ -768,11 +806,11 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             {showReclassify && (
               <div className="reclassify-panel">
                 <p className="feedback-title">Move to container:</p>
-                <div className="reclassify-options">
-                  {(['ACTIONABLE_NOW', 'CANDIDATES', 'AMBIGUITY', 'WAITING'] as const).map(c => (
+                <div className="picker-grid">
+                  {containerOptions.map(c => (
                     <button
                       key={c}
-                      className={`reclassify-option${action.container === c ? ' reclassify-option--current' : ''}`}
+                      className={`picker-grid-btn${action.container === c ? ' picker-grid-btn--current' : ''}`}
                       disabled={action.container === c}
                       onClick={() => doReclassify(c)}
                     >
@@ -797,6 +835,64 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             actionId={actionId}
             onClose={() => setShowAddTrigger(false)}
             onCreated={handleTriggerUpdate}
+          />
+        )}
+
+        {confirmState && confirmState.type === 'delete' && (
+          <ConfirmModal
+            title="Delete Action"
+            message={`Permanently delete "${action.description.substring(0, 60)}"? This cannot be undone.`}
+            confirmLabel="Delete"
+            danger
+            onConfirm={() => handleConfirmAction()}
+            onCancel={() => setConfirmState(null)}
+          />
+        )}
+
+        {confirmState && confirmState.type === 'archive' && (
+          <ConfirmModal
+            title="Archive Action"
+            message="Archive this action? You can find it later in search."
+            confirmLabel="Archive"
+            onConfirm={() => handleConfirmAction()}
+            onCancel={() => setConfirmState(null)}
+          />
+        )}
+
+        {confirmState && confirmState.type === 'merge-id' && (
+          <ConfirmModal
+            title="Merge Action"
+            message="Enter the ID of the action to merge this into."
+            confirmLabel="Next"
+            inputMode
+            inputPlaceholder="Action ID"
+            inputLabel="Target action ID:"
+            onConfirm={(val) => handleConfirmAction(val)}
+            onCancel={() => setConfirmState(null)}
+          />
+        )}
+
+        {confirmState && confirmState.type === 'merge-confirm' && (
+          <ConfirmModal
+            title="Confirm Merge"
+            message={`Merge this action into action #${confirmState.primaryId}? This cannot be undone.`}
+            confirmLabel="Merge"
+            danger
+            onConfirm={() => handleConfirmAction()}
+            onCancel={() => setConfirmState(null)}
+          />
+        )}
+
+        {confirmState && confirmState.type === 'text-correction' && (
+          <ConfirmModal
+            title="Correct Description"
+            message="What should the parsed text say?"
+            confirmLabel="Submit"
+            inputMode
+            inputPlaceholder="Corrected description..."
+            inputLabel="Correct text:"
+            onConfirm={(val) => handleConfirmAction(val)}
+            onCancel={() => setConfirmState(null)}
           />
         )}
 
@@ -1044,6 +1140,9 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             padding: 8px 12px;
             font-size: 13px;
           }
+          .followup-archive-btn {
+            color: var(--text-secondary);
+          }
           .action-view-buttons {
             display: flex;
             gap: 8px;
@@ -1112,13 +1211,13 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             padding: 12px;
             margin-top: 8px;
           }
-          .reclassify-options {
+          .picker-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 8px;
             margin-bottom: 4px;
           }
-          .reclassify-option {
+          .picker-grid-btn {
             padding: 12px;
             border: 1px solid var(--separator);
             border-radius: 8px;
@@ -1129,14 +1228,20 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             cursor: pointer;
             text-align: center;
             font-family: inherit;
+            transition: all 0.15s;
           }
-          .reclassify-option:hover:not(:disabled) {
+          .picker-grid-btn:hover:not(:disabled) {
             background: rgba(0, 122, 255, 0.1);
             border-color: var(--color-now);
           }
-          .reclassify-option--current {
+          .picker-grid-btn--current {
             opacity: 0.35;
             cursor: default;
+          }
+          .picker-grid-btn--selected {
+            background: rgba(0, 122, 255, 0.15);
+            border-color: var(--accent);
+            color: var(--accent);
           }
           .action-detail-source {
             background: var(--bg-card);
@@ -1193,10 +1298,6 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
           .feedback-picker-label {
             font-size: 13px;
             color: var(--text-secondary);
-          }
-          .feedback-picker-select {
-            font-size: 13px;
-            padding: 8px 10px;
           }
           .feedback-picker-actions {
             display: flex;

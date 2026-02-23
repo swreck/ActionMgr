@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Trigger, TRIGGER_TYPE_LABELS } from '../types'
 import { fireTrigger, checkTrigger, deleteTrigger } from '../api/client'
+import ConfirmModal from './ConfirmModal'
 
 interface TriggerCardProps {
   trigger: Trigger
@@ -9,6 +10,7 @@ interface TriggerCardProps {
 
 export default function TriggerCard({ trigger, onUpdate }: TriggerCardProps) {
   const [loading, setLoading] = useState(false)
+  const [confirmAction, setConfirmAction] = useState<'fire' | 'delete' | null>(null)
 
   function formatDate(dateStr: string | null): string {
     if (!dateStr) return ''
@@ -50,49 +52,41 @@ export default function TriggerCard({ trigger, onUpdate }: TriggerCardProps) {
   }
 
   async function handleFire() {
-    if (!confirm('Fire this trigger now? The action will move to Actionable Now.')) return
-
     setLoading(true)
     try {
       await fireTrigger(trigger.id)
       onUpdate()
     } catch (err) {
       console.error('Failed to fire trigger:', err)
-      alert('Failed to fire trigger')
     } finally {
       setLoading(false)
     }
+    setConfirmAction(null)
   }
 
   async function handleCheck(conditionMet: boolean) {
     setLoading(true)
     try {
-      const result = await checkTrigger(trigger.id, conditionMet)
-      if (result.fired) {
-        alert('Condition met! Action moved to Actionable Now.')
-      }
+      await checkTrigger(trigger.id, conditionMet)
       onUpdate()
     } catch (err) {
       console.error('Failed to check trigger:', err)
-      alert('Failed to check trigger')
     } finally {
       setLoading(false)
     }
   }
 
   async function handleDelete() {
-    if (!confirm('Delete this trigger?')) return
-
     setLoading(true)
     try {
       await deleteTrigger(trigger.id)
       onUpdate()
     } catch (err) {
       console.error('Failed to delete trigger:', err)
-      alert('Failed to delete trigger')
     } finally {
       setLoading(false)
     }
+    setConfirmAction(null)
   }
 
   if (trigger.isTriggered) {
@@ -148,7 +142,7 @@ export default function TriggerCard({ trigger, onUpdate }: TriggerCardProps) {
         ) : (
           <button
             className="trigger-btn fire"
-            onClick={handleFire}
+            onClick={() => setConfirmAction('fire')}
             disabled={loading}
             title="Fire now"
           >
@@ -157,13 +151,34 @@ export default function TriggerCard({ trigger, onUpdate }: TriggerCardProps) {
         )}
         <button
           className="trigger-btn delete"
-          onClick={handleDelete}
+          onClick={() => setConfirmAction('delete')}
           disabled={loading}
           title="Delete"
         >
           ✕
         </button>
       </div>
+
+      {confirmAction === 'fire' && (
+        <ConfirmModal
+          title="Fire Trigger"
+          message="Fire this trigger now? The action will move to Actionable Now."
+          confirmLabel="Fire"
+          onConfirm={handleFire}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
+
+      {confirmAction === 'delete' && (
+        <ConfirmModal
+          title="Delete Trigger"
+          message="Delete this trigger?"
+          confirmLabel="Delete"
+          danger
+          onConfirm={handleDelete}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
 
       <style>{`
         .trigger-card {

@@ -9,12 +9,18 @@ import {
   TuningRule,
   TuningStats
 } from '../api/client'
+import ConfirmModal from '../components/ConfirmModal'
 
 interface TuningProps {
   onClose: () => void
 }
 
 type TabType = 'proposed' | 'shadow' | 'active' | 'rejected'
+
+type TuningConfirm =
+  | null
+  | { type: 'delete'; ruleId: number }
+  | { type: 'reject-feedback'; ruleId: number }
 
 export default function Tuning({ onClose }: TuningProps) {
   const [rules, setRules] = useState<TuningRule[]>([])
@@ -23,6 +29,7 @@ export default function Tuning({ onClose }: TuningProps) {
   const [activeTab, setActiveTab] = useState<TabType>('proposed')
   const [rejectingId, setRejectingId] = useState<number | null>(null)
   const [expandedId, setExpandedId] = useState<number | null>(null)
+  const [tuningConfirm, setTuningConfirm] = useState<TuningConfirm>(null)
 
   useEffect(() => {
     loadData()
@@ -53,11 +60,11 @@ export default function Tuning({ onClose }: TuningProps) {
     }
   }
 
-  async function handleReject(ruleId: number, dontAskAgain = false) {
-    const feedback = dontAskAgain ? undefined : (prompt('Why are you rejecting this rule? (optional)') || undefined)
+  async function handleReject(ruleId: number, dontAskAgain = false, feedback?: string) {
     try {
       await rejectTuningRule(ruleId, feedback, dontAskAgain)
       setRejectingId(null)
+      setTuningConfirm(null)
       loadData()
     } catch (err) {
       console.error('Failed to reject rule:', err)
@@ -74,9 +81,9 @@ export default function Tuning({ onClose }: TuningProps) {
   }
 
   async function handleDelete(ruleId: number) {
-    if (!confirm('Delete this tuning rule?')) return
     try {
       await deleteTuningRule(ruleId)
+      setTuningConfirm(null)
       loadData()
     } catch (err) {
       console.error('Failed to delete rule:', err)
@@ -288,7 +295,7 @@ export default function Tuning({ onClose }: TuningProps) {
                           <div className="reject-options">
                             <button
                               className="btn btn-secondary btn-small"
-                              onClick={(e) => { e.stopPropagation(); handleReject(rule.id, false) }}
+                              onClick={(e) => { e.stopPropagation(); setTuningConfirm({ type: 'reject-feedback', ruleId: rule.id }) }}
                             >
                               Just reject
                             </button>
@@ -322,7 +329,7 @@ export default function Tuning({ onClose }: TuningProps) {
                         )}
                         <button
                           className="btn-link danger"
-                          onClick={(e) => { e.stopPropagation(); handleDelete(rule.id) }}
+                          onClick={(e) => { e.stopPropagation(); setTuningConfirm({ type: 'delete', ruleId: rule.id }) }}
                         >
                           Delete
                         </button>
@@ -335,6 +342,30 @@ export default function Tuning({ onClose }: TuningProps) {
           )}
         </div>
       </div>
+
+      {tuningConfirm?.type === 'delete' && (
+        <ConfirmModal
+          title="Delete Rule"
+          message="Delete this tuning rule?"
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => handleDelete(tuningConfirm.ruleId)}
+          onCancel={() => setTuningConfirm(null)}
+        />
+      )}
+
+      {tuningConfirm?.type === 'reject-feedback' && (
+        <ConfirmModal
+          title="Reject Rule"
+          message="Why are you rejecting this rule?"
+          confirmLabel="Reject"
+          inputMode
+          inputPlaceholder="Reason (optional)"
+          inputLabel="Feedback:"
+          onConfirm={(val) => handleReject(tuningConfirm.ruleId, false, val || undefined)}
+          onCancel={() => setTuningConfirm(null)}
+        />
+      )}
 
       <style>{`
         .tuning-overlay {

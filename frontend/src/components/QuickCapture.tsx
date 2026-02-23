@@ -142,7 +142,7 @@ export default function QuickCapture({ onClose, onCreated }: QuickCaptureProps) 
         {/* Step 2: Loading */}
         {step === 'parsing' && (
           <div className="parsing-state">
-            <div className="parsing-spinner" />
+            <div className="spinner" />
             <p>Analyzing your input...</p>
           </div>
         )}
@@ -319,18 +319,6 @@ export default function QuickCapture({ onClose, onCreated }: QuickCaptureProps) 
           .parsing-state {
             text-align: center;
             padding: 32px;
-          }
-          .parsing-spinner {
-            width: 32px;
-            height: 32px;
-            border: 3px solid var(--bg-card);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            margin: 0 auto 16px;
-            animation: spin 1s linear infinite;
-          }
-          @keyframes spin {
-            to { transform: rotate(360deg); }
           }
           .preview-section {
             margin-bottom: 16px;

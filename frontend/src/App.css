@@ -412,6 +412,21 @@ body {
 .confidence-dot.medium { background-color: var(--warning); }
 .confidence-dot.low    { background-color: var(--urgency-critical); }
 
+/* ─── Shared spinner ─────────────────────────────────────────────────── */
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--bg-card);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  margin: 0 auto 16px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 /* ─── Quick Capture FAB ───────────────────────────────────────────────── */
 .quick-capture {
   position: fixed;
@@ -769,6 +784,36 @@ body {
 
 .bulk-move-option:hover {
   background: var(--bg-elevated);
+}
+
+/* ─── Group suggestion banner in Feed ─────────────────────────────────── */
+.group-suggestion-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(88, 86, 214, 0.08);
+  border: 1px solid rgba(88, 86, 214, 0.2);
+  border-radius: 10px;
+  cursor: pointer;
+  margin: 0 0 4px;
+}
+
+.group-suggestion-icon {
+  font-size: 16px;
+}
+
+.group-suggestion-text {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-review);
+}
+
+.group-suggestion-arrow {
+  font-size: 18px;
+  color: var(--color-review);
+  font-weight: 600;
 }
 
 /* ─── Tuning page: expandable rule cards ──────────────────────────────── */

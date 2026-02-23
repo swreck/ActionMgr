@@ -114,6 +114,7 @@ function App() {
           key={refreshKey}
           activeContainer={activeContainer}
           flagFilter={flagFilter}
+          onOpenGroups={() => setShowGroups(true)}
         />
       </main>
 

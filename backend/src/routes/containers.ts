@@ -31,6 +31,18 @@ router.get('/counts', async (_req: Request, res: Response, next: NextFunction) =
       result[row.container] = row._count.id
     }
 
+    // Include flag counts in the same response
+    const [needsClarification, needsTuning] = await Promise.all([
+      prisma.action.count({
+        where: { archivedAt: null, needsClarification: true }
+      }),
+      prisma.action.count({
+        where: { archivedAt: null, needsTuning: true }
+      })
+    ])
+    result.needsClarification = needsClarification
+    result.needsTuning = needsTuning
+
     res.json(result)
   } catch (err) {
     next(err)

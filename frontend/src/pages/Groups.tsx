@@ -12,6 +12,7 @@ import {
   GroupSuggestion
 } from '../api/client'
 import { Action, URGENCY_LABELS } from '../types'
+import ConfirmModal from '../components/ConfirmModal'
 
 interface GroupsProps {
   onClose: () => void
@@ -32,6 +33,7 @@ export default function Groups({ onClose, onSelectAction }: GroupsProps) {
   const [selectedActionIds, setSelectedActionIds] = useState<Set<number>>(new Set())
   const [originalActionIds, setOriginalActionIds] = useState<Set<number>>(new Set())
   const [addActionsLoading, setAddActionsLoading] = useState(false)
+  const [deleteGroupId, setDeleteGroupId] = useState<number | null>(null)
 
   useEffect(() => {
     loadData()
@@ -84,10 +86,9 @@ export default function Groups({ onClose, onSelectAction }: GroupsProps) {
   }
 
   async function handleDeleteGroup(groupId: number) {
-    if (!confirm('Delete this group? Actions will be ungrouped.')) return
-
     try {
       await deleteGroup(groupId)
+      setDeleteGroupId(null)
       loadData()
     } catch (err) {
       console.error('Failed to delete group:', err)
@@ -299,7 +300,7 @@ export default function Groups({ onClose, onSelectAction }: GroupsProps) {
                         </button>
                         <button
                           className="btn-link"
-                          onClick={() => handleDeleteGroup(group.id)}
+                          onClick={() => setDeleteGroupId(group.id)}
                         >
                           Delete Group
                         </button>
@@ -419,6 +420,31 @@ export default function Groups({ onClose, onSelectAction }: GroupsProps) {
                 autoFocus
               />
             </div>
+            {!addActionsLoading && filteredActions.length > 0 && (
+              <div className="add-actions-select-all">
+                <label className="select-all-label">
+                  <input
+                    type="checkbox"
+                    checked={filteredActions.every(a => selectedActionIds.has(a.id))}
+                    onChange={() => {
+                      const allFilteredSelected = filteredActions.every(a => selectedActionIds.has(a.id))
+                      setSelectedActionIds(prev => {
+                        const next = new Set(prev)
+                        for (const a of filteredActions) {
+                          if (allFilteredSelected) {
+                            next.delete(a.id)
+                          } else {
+                            next.add(a.id)
+                          }
+                        }
+                        return next
+                      })
+                    }}
+                  />
+                  Select All ({filteredActions.length})
+                </label>
+              </div>
+            )}
             <div className="add-actions-list">
               {addActionsLoading ? (
                 <div className="groups-loading">Loading actions...</div>
@@ -446,6 +472,17 @@ export default function Groups({ onClose, onSelectAction }: GroupsProps) {
             </button>
           </div>
         </div>
+      )}
+
+      {deleteGroupId !== null && (
+        <ConfirmModal
+          title="Delete Group"
+          message="Delete this group? Actions will be ungrouped but not deleted."
+          confirmLabel="Delete"
+          danger
+          onConfirm={() => handleDeleteGroup(deleteGroupId)}
+          onCancel={() => setDeleteGroupId(null)}
+        />
       )}
 
       <style>{`
@@ -718,6 +755,18 @@ export default function Groups({ onClose, onSelectAction }: GroupsProps) {
           max-height: 80vh;
           display: flex;
           flex-direction: column;
+        }
+        .add-actions-select-all {
+          padding: 8px 12px;
+          border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .add-actions-select-all .select-all-label {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 14px;
+          color: var(--text-secondary);
+          cursor: pointer;
         }
         .add-actions-list {
           flex: 1;

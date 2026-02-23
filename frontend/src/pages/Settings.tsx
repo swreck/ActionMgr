@@ -14,6 +14,7 @@ import {
   runFollowUpCheck,
   runTriggerCheck
 } from '../api/client'
+import ConfirmModal from '../components/ConfirmModal'
 
 interface SettingsProps {
   onClose: () => void
@@ -30,6 +31,7 @@ export default function Settings({ onClose }: SettingsProps) {
   const [notifLoading, setNotifLoading] = useState(false)
   const [toolRunning, setToolRunning] = useState<string | null>(null)
   const [toolResult, setToolResult] = useState<{ key: string; message: string; success: boolean } | null>(null)
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -63,14 +65,12 @@ export default function Settings({ onClose }: SettingsProps) {
   }
 
   async function handleDisconnectGmail() {
-    if (!confirm('Are you sure you want to disconnect Gmail?')) return
-
     try {
       await disconnectGmail()
+      setShowDisconnectConfirm(false)
       await loadData()
     } catch (err) {
       console.error('Failed to disconnect Gmail:', err)
-      alert('Failed to disconnect Gmail')
     }
   }
 
@@ -258,7 +258,7 @@ export default function Settings({ onClose }: SettingsProps) {
                       </button>
                       <button
                         className="btn btn-secondary"
-                        onClick={handleDisconnectGmail}
+                        onClick={() => setShowDisconnectConfirm(true)}
                       >
                         Disconnect
                       </button>
@@ -414,6 +414,17 @@ export default function Settings({ onClose }: SettingsProps) {
               </p>
             </div>
           </>
+        )}
+
+        {showDisconnectConfirm && (
+          <ConfirmModal
+            title="Disconnect Gmail"
+            message="Are you sure you want to disconnect Gmail? Automatic email scanning will stop."
+            confirmLabel="Disconnect"
+            danger
+            onConfirm={handleDisconnectGmail}
+            onCancel={() => setShowDisconnectConfirm(false)}
+          />
         )}
 
         <style>{`

@@ -153,6 +153,29 @@ router.post('/bulk/complete', async (req: Request, res: Response, next: NextFunc
       }
     }
 
+    // Auto-archive groups where all actions are now complete
+    const affectedGroupIds = new Set<number>()
+    const completedActions = await prisma.action.findMany({
+      where: { id: { in: ids.map((id: string | number) => typeof id === 'string' ? parseInt(id) : id) } },
+      select: { groupId: true }
+    })
+    for (const a of completedActions) {
+      if (a.groupId) affectedGroupIds.add(a.groupId)
+    }
+    for (const groupId of affectedGroupIds) {
+      // Query all group actions (not just unarchived — completing sets archivedAt)
+      const groupActions = await prisma.action.findMany({
+        where: { groupId },
+        select: { completedAt: true }
+      })
+      if (groupActions.length > 0 && groupActions.every(a => a.completedAt !== null)) {
+        await prisma.actionGroup.update({
+          where: { id: groupId },
+          data: { archivedAt: new Date() }
+        })
+      }
+    }
+
     res.json({ completed, nextActions })
   } catch (err) {
     next(err)
@@ -377,7 +400,7 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
 // POST /api/actions - Create new action (manual entry)
 router.post('/', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { description, urgency, dueDate, suggestedAction } = req.body
+    const { description, urgency, dueDate, suggestedAction, groupId } = req.body
 
     if (!description || typeof description !== 'string') {
       return res.status(400).json({ message: 'Description is required' })
@@ -401,7 +424,8 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
         suggestedAction: suggestedAction || null,
         container: 'ACTIONABLE_NOW', // Manual entries go directly to Actionable
         confidence: 1.0, // User-created = full confidence
-        sourceId: source.id
+        sourceId: source.id,
+        groupId: groupId ?? null
       },
       include: {
         source: true
@@ -544,7 +568,25 @@ router.post('/:id/complete', async (req: Request, res: Response, next: NextFunct
       nextAction = await createNextOccurrence(action)
     }
 
-    res.json({ ...action, nextAction })
+    // Auto-archive group if all actions are now complete
+    let groupArchived = false
+    if (action.groupId) {
+      // Query all group actions (not just unarchived — completing sets archivedAt)
+      const groupActions = await prisma.action.findMany({
+        where: { groupId: action.groupId },
+        select: { completedAt: true }
+      })
+      const allComplete = groupActions.length > 0 && groupActions.every(a => a.completedAt !== null)
+      if (allComplete) {
+        await prisma.actionGroup.update({
+          where: { id: action.groupId },
+          data: { archivedAt: new Date() }
+        })
+        groupArchived = true
+      }
+    }
+
+    res.json({ ...action, nextAction, groupArchived })
   } catch (err) {
     next(err)
   }

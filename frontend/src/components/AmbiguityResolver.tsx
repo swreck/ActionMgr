@@ -124,7 +124,7 @@ export default function AmbiguityResolver({ actionId, onClose, onResolved }: Amb
             <button className="modal-close" onClick={onClose}>&times;</button>
           </div>
           <div className="ambiguity-loading">
-            <div className="ambiguity-spinner" />
+            <div className="spinner" />
             <p>Loading...</p>
           </div>
         </div>
@@ -226,7 +226,7 @@ export default function AmbiguityResolver({ actionId, onClose, onResolved }: Amb
 
         {step === 'saving' && (
           <div className="ambiguity-loading">
-            <div className="ambiguity-spinner" />
+            <div className="spinner" />
             <p>Saving...</p>
           </div>
         )}
@@ -255,18 +255,6 @@ export default function AmbiguityResolver({ actionId, onClose, onResolved }: Amb
           .ambiguity-loading {
             text-align: center;
             padding: 32px;
-          }
-          .ambiguity-spinner {
-            width: 32px;
-            height: 32px;
-            border: 3px solid var(--bg-card);
-            border-top-color: var(--accent);
-            border-radius: 50%;
-            margin: 0 auto 16px;
-            animation: spin 1s linear infinite;
-          }
-          @keyframes spin {
-            to { transform: rotate(360deg); }
           }
           .ambiguity-error {
             color: var(--urgency-critical);

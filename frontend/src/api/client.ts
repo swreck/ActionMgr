@@ -442,9 +442,7 @@ export interface GroupSuggestion {
 }
 
 export async function getGroupSuggestions(): Promise<{ suggestions: GroupSuggestion[] }> {
-  return request<{ suggestions: GroupSuggestion[] }>('/groups/suggest', {
-    method: 'POST'
-  })
+  return request<{ suggestions: GroupSuggestion[] }>('/groups/suggestions')
 }
 
 export async function mergeActions(
