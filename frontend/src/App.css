@@ -324,9 +324,7 @@ body {
   overflow: hidden;
 }
 
-.action-card:active {
-  transform: scale(0.98);
-}
+/* No :active transform — it causes layout shift that dismisses iOS copy menu */
 
 .action-card-delete-bg {
   position: absolute;

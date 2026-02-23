@@ -45,13 +45,18 @@ export default function ActionCard({ action, onClick, onDelete, selectable, sele
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
   }
 
+  function hasTextSelection(): boolean {
+    const sel = window.getSelection()
+    return !!(sel && sel.toString().length > 0)
+  }
+
   function handleTouchStart(e: React.TouchEvent) {
     touchStartX.current = e.touches[0].clientX
-    setSwiping(false)
   }
 
   function handleTouchMove(e: React.TouchEvent) {
     if (touchStartX.current === null) return
+    if (hasTextSelection()) return // Don't interfere with text selection
     const delta = e.touches[0].clientX - touchStartX.current
     // Only allow leftward swipe (negative delta)
     if (delta < -10) {
@@ -61,6 +66,10 @@ export default function ActionCard({ action, onClick, onDelete, selectable, sele
   }
 
   function handleTouchEnd() {
+    if (hasTextSelection()) {
+      touchStartX.current = null
+      return // Let iOS show copy menu without re-rendering
+    }
     if (swipeDelta < -120 && onDelete) {
       // Swipe far enough — delete
       setSwipeDelta(-300) // animate off-screen
