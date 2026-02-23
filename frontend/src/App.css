@@ -314,8 +314,6 @@ body {
 /* ─── Action Card ─────────────────────────────────────────────────────── */
 .action-card {
   display: flex;
-  gap: 12px;
-  padding: 16px;
   background-color: var(--bg-card);
   border-radius: var(--border-radius);
   cursor: pointer;
@@ -351,6 +349,7 @@ body {
   background: var(--bg-card);
   display: flex;
   gap: 12px;
+  padding: 16px;
   width: 100%;
 }
 
