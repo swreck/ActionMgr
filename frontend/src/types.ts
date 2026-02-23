@@ -32,6 +32,7 @@ export interface Action {
   commitmentConfidence?: number
   needsClarification?: boolean
   needsTuning?: boolean
+  missingInfo?: string | null
   parseConfidence?: number
   source?: Source
   events?: ActionEvent[]

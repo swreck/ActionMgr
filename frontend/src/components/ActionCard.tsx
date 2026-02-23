@@ -130,7 +130,11 @@ export default function ActionCard({ action, onClick, onDelete, selectable, sele
               <span className="badge badge-waiting">Waiting</span>
             )}
             {action.needsClarification && (
-              <span className="badge badge-clarify">Clarify</span>
+              <span className="badge badge-clarify">
+                {action.missingInfo
+                  ? `Unclear: ${(JSON.parse(action.missingInfo) as string[]).slice(0, 2).join(', ')}`
+                  : 'Clarify'}
+              </span>
             )}
             {action.needsTuning && (
               <span className="badge badge-tuning">Tuning</span>

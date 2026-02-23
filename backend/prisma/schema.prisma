@@ -38,6 +38,7 @@ model Action {
   rawInput        String
   parseVersion    Int             @default(1)
   aiReasoning     String?
+  missingInfo     String?         // JSON array of unclear fields, e.g. ["specific date", "contact info"]
   recurrenceRule  String?         // RRULE format: FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=15
   leadTimeDays    Int             @default(21) // Days before dueDate to move from WAITING → NOW
 

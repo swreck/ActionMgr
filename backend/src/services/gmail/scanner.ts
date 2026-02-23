@@ -345,6 +345,8 @@ async function processEmail(email: EmailContent): Promise<ParsedAction | null> {
       confidence: parsed.confidence,
       commitmentConfidence: parsed.commitmentConfidence ?? null,
       aiReasoning: parsed.reasoning,
+      missingInfo: parsed.missingInfo && parsed.missingInfo.length > 0 ? JSON.stringify(parsed.missingInfo) : null,
+      needsClarification: parsed.missingInfo && parsed.missingInfo.length > 0 && parsed.confidence >= 0.3,
       dueDate: parsed.dueDate ? new Date(parsed.dueDate) : null,
       sourceId: source.id
     }

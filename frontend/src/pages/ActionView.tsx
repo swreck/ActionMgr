@@ -373,10 +373,20 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             <div className="action-detail-content">
               <div className="action-detail-description">{action.description}</div>
 
-              {action.needsClarification && action.aiReasoning && (
+              {action.needsClarification && (
                 <div className="clarification-banner">
-                  <div className="clarification-title">Needs clarification</div>
-                  <div className="clarification-detail">{action.aiReasoning}</div>
+                  <div className="clarification-title">I categorized this the best I could, but I'm not confident about:</div>
+                  {action.missingInfo ? (
+                    <ul className="clarification-list">
+                      {(JSON.parse(action.missingInfo) as string[]).map((item, i) => (
+                        <li key={i} className="clarification-item">{item}</li>
+                      ))}
+                    </ul>
+                  ) : action.aiReasoning ? (
+                    <div className="clarification-detail">{action.aiReasoning}</div>
+                  ) : (
+                    <div className="clarification-detail">Review this action and edit any fields that seem off.</div>
+                  )}
                 </div>
               )}
 
@@ -868,6 +878,15 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             font-weight: 600;
             color: var(--warning);
             margin-bottom: 4px;
+          }
+          .clarification-list {
+            margin: 4px 0 0 0;
+            padding-left: 20px;
+          }
+          .clarification-item {
+            font-size: 13px;
+            color: var(--text-primary);
+            line-height: 1.6;
           }
           .clarification-detail {
             font-size: 13px;
