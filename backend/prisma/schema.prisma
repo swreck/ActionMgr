@@ -37,7 +37,8 @@ model Action {
   rawInput        String
   parseVersion    Int             @default(1)
   aiReasoning     String?
-  recurrenceRule  String?         // e.g. YEARLY_11, MONTHLY, WEEKLY, EVERY_6_MONTHS
+  recurrenceRule  String?         // RRULE format: FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=15
+  leadTimeDays    Int             @default(21) // Days before dueDate to move from WAITING → NOW
 
   // Concurrency control
   version         Int             @default(0)

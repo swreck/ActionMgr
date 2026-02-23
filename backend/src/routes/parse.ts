@@ -57,6 +57,7 @@ router.post('/confirm', async (req: Request, res: Response, next: NextFunction) 
       parties,
       triggers,
       recurrenceRule,
+      leadTimeDays,
       missingInfo
     } = req.body as ParsedAction & { rawInput: string }
 
@@ -86,6 +87,7 @@ router.post('/confirm', async (req: Request, res: Response, next: NextFunction) 
         aiReasoning: reasoning,
         container: container || 'CANDIDATES',
         recurrenceRule: recurrenceRule || null,
+        leadTimeDays: leadTimeDays ?? 21,
         sourceId: source.id
       },
       include: {
@@ -142,10 +144,11 @@ router.post('/confirm', async (req: Request, res: Response, next: NextFunction) 
       const dueDateObj = new Date(dueDate)
       const now = new Date()
       if (dueDateObj > now) {
-        const twentyOneDaysMs = 21 * 24 * 60 * 60 * 1000
+        const effectiveLeadDays = leadTimeDays ?? 21
+        const leadMs = effectiveLeadDays * 24 * 60 * 60 * 1000
         const msUntilDue = dueDateObj.getTime() - now.getTime()
-        const triggerDate = msUntilDue > twentyOneDaysMs
-          ? new Date(dueDateObj.getTime() - twentyOneDaysMs)
+        const triggerDate = msUntilDue > leadMs
+          ? new Date(dueDateObj.getTime() - leadMs)
           : dueDateObj
 
         await prisma.trigger.create({
@@ -256,6 +259,7 @@ router.post('/:id/reparse', async (req: Request, res: Response, next: NextFuncti
         aiReasoning: parsed.reasoning,
         container: parsed.container,
         recurrenceRule: parsed.recurrenceRule || null,
+        leadTimeDays: parsed.leadTimeDays,
         parseVersion: { increment: 1 },
         version: { increment: 1 }
       },
@@ -317,6 +321,7 @@ router.post('/siri', async (req: Request, res: Response, next: NextFunction) => 
         aiReasoning: parsed.reasoning,
         container: parsed.container,
         recurrenceRule: parsed.recurrenceRule || null,
+        leadTimeDays: parsed.leadTimeDays,
         sourceId: source.id
       }
     })

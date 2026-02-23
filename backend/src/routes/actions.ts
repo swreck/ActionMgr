@@ -1,10 +1,105 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { Container, Urgency, Prisma } from '@prisma/client'
 import { prisma } from '../index'
+import { calculateNextDate } from '../services/recurrence'
 
 const router = Router()
 
 const VALID_BULK_CONTAINERS: Container[] = ['ACTIONABLE_NOW', 'CANDIDATES', 'AMBIGUITY', 'WAITING']
+
+/**
+ * Create the next occurrence of a recurring action after completion.
+ * Returns the new action or null if not recurring.
+ */
+async function createNextOccurrence(completedAction: {
+  id: number
+  description: string
+  suggestedAction: string | null
+  urgency: Urgency
+  rawInput: string
+  recurrenceRule: string | null
+  leadTimeDays: number
+  dueDate: Date | null
+  sourceId: number
+  aiReasoning: string | null
+  confidence: number
+  commitmentConfidence: number | null
+}) {
+  if (!completedAction.recurrenceRule) return null
+
+  try {
+    // Pass the completed action's dueDate so the next occurrence is after it
+    const nextDueDate = calculateNextDate(
+      completedAction.recurrenceRule,
+      completedAction.dueDate || undefined
+    )
+    const now = new Date()
+
+    // Determine trigger date based on lead time
+    const triggerDate = new Date(nextDueDate)
+    triggerDate.setDate(triggerDate.getDate() - completedAction.leadTimeDays)
+
+    // If trigger date is already past, put directly in ACTIONABLE_NOW
+    const container: Container = triggerDate <= now ? 'ACTIONABLE_NOW' : 'WAITING'
+
+    // Create source for the new occurrence
+    const source = await prisma.source.create({
+      data: {
+        type: 'MANUAL',
+        manualNote: `Recurring: ${completedAction.description}`
+      }
+    })
+
+    const nextAction = await prisma.action.create({
+      data: {
+        description: completedAction.description,
+        suggestedAction: completedAction.suggestedAction,
+        rawInput: completedAction.rawInput,
+        urgency: completedAction.urgency,
+        dueDate: nextDueDate,
+        recurrenceRule: completedAction.recurrenceRule,
+        leadTimeDays: completedAction.leadTimeDays,
+        container,
+        confidence: completedAction.confidence,
+        commitmentConfidence: completedAction.commitmentConfidence,
+        aiReasoning: completedAction.aiReasoning,
+        sourceId: source.id
+      },
+      include: { source: true, triggers: true }
+    })
+
+    // Create DATE_EXACT trigger if going to WAITING
+    if (container === 'WAITING') {
+      await prisma.trigger.create({
+        data: {
+          actionId: nextAction.id,
+          type: 'DATE_EXACT',
+          description: `Auto-reminder: due ${nextDueDate.toISOString().split('T')[0]}`,
+          triggerDate: triggerDate > now ? triggerDate : nextDueDate
+        }
+      })
+    }
+
+    // Log creation event
+    await prisma.actionEvent.create({
+      data: {
+        actionId: nextAction.id,
+        type: 'CREATED',
+        toContainer: container,
+        details: JSON.stringify({
+          source: 'RECURRENCE',
+          previousActionId: completedAction.id,
+          recurrenceRule: completedAction.recurrenceRule
+        })
+      }
+    })
+
+    return nextAction
+  } catch (err) {
+    console.error(`Failed to create next occurrence for action ${completedAction.id}:`, err)
+    return null
+  }
+}
 const BULK_LIMIT = 50
 
 // POST /api/actions/bulk/complete - Bulk complete actions
@@ -21,11 +116,12 @@ router.post('/bulk/complete', async (req: Request, res: Response, next: NextFunc
 
     const now = new Date()
     let completed = 0
+    const nextActions: Array<{ id: number; description: string; dueDate: string | null }> = []
 
     for (const id of ids) {
       const numId = typeof id === 'string' ? parseInt(id) : id
       try {
-        await prisma.action.update({
+        const action = await prisma.action.update({
           where: { id: numId },
           data: {
             completedAt: now,
@@ -40,12 +136,24 @@ router.post('/bulk/complete', async (req: Request, res: Response, next: NextFunc
           }
         })
         completed++
+
+        // Auto-create next occurrence for recurring actions
+        if (action.recurrenceRule) {
+          const next = await createNextOccurrence(action)
+          if (next) {
+            nextActions.push({
+              id: next.id,
+              description: next.description,
+              dueDate: next.dueDate?.toISOString() || null
+            })
+          }
+        }
       } catch {
         // Skip actions that don't exist
       }
     }
 
-    res.json({ completed })
+    res.json({ completed, nextActions })
   } catch (err) {
     next(err)
   }
@@ -320,7 +428,7 @@ router.post('/', async (req: Request, res: Response, next: NextFunction) => {
 router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const id = parseInt(req.params.id as string)
-    const { version, description, suggestedAction, urgency, dueDate, container, needsClarification, needsTuning } = req.body
+    const { version, description, suggestedAction, urgency, dueDate, container, needsClarification, needsTuning, leadTimeDays } = req.body
 
     // Check version for optimistic concurrency
     const existing = await prisma.action.findUnique({ where: { id } })
@@ -348,6 +456,7 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
     if (container !== undefined) updateData.container = container
     if (needsClarification !== undefined) updateData.needsClarification = needsClarification
     if (needsTuning !== undefined) updateData.needsTuning = needsTuning
+    if (leadTimeDays !== undefined) updateData.leadTimeDays = leadTimeDays
 
     const action = await prisma.action.update({
       where: { id },
@@ -429,7 +538,13 @@ router.post('/:id/complete', async (req: Request, res: Response, next: NextFunct
       }
     })
 
-    res.json(action)
+    // Auto-create next occurrence for recurring actions
+    let nextAction = null
+    if (action.recurrenceRule) {
+      nextAction = await createNextOccurrence(action)
+    }
+
+    res.json({ ...action, nextAction })
   } catch (err) {
     next(err)
   }

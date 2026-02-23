@@ -1,4 +1,5 @@
 import { Action } from '../types'
+import { formatRecurrenceLabel } from '../utils/recurrence'
 
 interface ActionCardProps {
   action: Action
@@ -71,6 +72,9 @@ export default function ActionCard({ action, onClick, selectable, selected, onSe
           )}
           {action.needsTuning && (
             <span className="badge badge-tuning">Tuning</span>
+          )}
+          {action.recurrenceRule && (
+            <span className="badge badge-recurrence">↻ {formatRecurrenceLabel(action.recurrenceRule)}</span>
           )}
           {dueLabel && (
             <span className="action-due">{dueLabel}</span>

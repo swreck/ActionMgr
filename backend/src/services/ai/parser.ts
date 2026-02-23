@@ -1,5 +1,6 @@
 import { anthropic, AI_CONFIG, trackTokens } from './client'
 import { Container, Urgency } from '@prisma/client'
+import { suggestLeadTimeDays } from '../recurrence'
 
 // Parsed action result from AI
 export interface ParsedAction {
@@ -15,7 +16,8 @@ export interface ParsedAction {
   triggers: Array<{ type: string; description: string; webQuery?: string }>
   missingInfo: string[] // What info is needed for clarity
   container: Container
-  recurrenceRule: string | null // e.g. YEARLY_11, MONTHLY, WEEKLY, EVERY_6_MONTHS
+  recurrenceRule: string | null // RRULE format: FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=15
+  leadTimeDays: number // Days before dueDate to surface action (0-90)
   autoTrigger?: { type: string; triggerDate: string } // Auto-created for WAITING items with future dueDate
 }
 
@@ -105,7 +107,13 @@ const extractActionTool = {
       },
       recurrenceRule: {
         type: 'string',
-        description: 'Set only if the action explicitly repeats. Use one of: YEARLY (same date each year), YEARLY_MM (specific month, e.g. YEARLY_11 for every November), MONTHLY (every month), WEEKLY (every week), EVERY_6_MONTHS, EVERY_90_DAYS. Only set when recurrence is clearly stated; omit if unsure.'
+        description: 'Set only if the action explicitly repeats. Use RRULE format with FREQ, INTERVAL, BYMONTHDAY, BYMONTH, BYDAY fields. Examples: "FREQ=WEEKLY;INTERVAL=1" (weekly), "FREQ=WEEKLY;INTERVAL=2;BYDAY=MO" (biweekly on Monday), "FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=15" (monthly on the 15th), "FREQ=MONTHLY;INTERVAL=3;BYMONTHDAY=1" (quarterly on the 1st), "FREQ=MONTHLY;INTERVAL=6" (every 6 months), "FREQ=YEARLY;INTERVAL=1;BYMONTH=11" (yearly in November), "FREQ=DAILY;INTERVAL=90" (every 90 days). Only set when recurrence is clearly stated; omit if unsure.'
+      },
+      leadTimeDays: {
+        type: 'number',
+        minimum: 0,
+        maximum: 90,
+        description: 'Days before the due date to surface this action for the user. Only set when recurrenceRule is set. Defaults: weekly=1, monthly=3, quarterly=7, yearly=21. Set 0 for tasks due on the day itself.'
       }
     },
     required: ['hasAction', 'description', 'urgency', 'commitment_confidence', 'parse_confidence', 'reasoning', 'missingInfo']
@@ -140,14 +148,20 @@ Guidelines:
    - parse_confidence (0-1): Given it IS a real commitment, how confident are you in the specific parsed fields (description, urgency, dueDate, parties)?
      High (0.9+) when all details are explicitly stated. Lower when you had to infer dates, guess urgency, or assume who's involved.
 8. List what information is missing if the action is unclear
-9. Detect recurrence patterns and set recurrenceRule:
-   - "every year in November" or "annually in November" → YEARLY_11
-   - "every year" or "annually" (no specific month) → YEARLY
-   - "every month" or "monthly" → MONTHLY
-   - "every week" or "weekly" → WEEKLY
-   - "every 6 months" or "twice a year" → EVERY_6_MONTHS
-   - "every quarter" or "every 90 days" → EVERY_90_DAYS
+9. Detect recurrence patterns and set recurrenceRule using RRULE format:
+   - "every week" or "weekly" → FREQ=WEEKLY;INTERVAL=1
+   - "every two weeks" or "biweekly" → FREQ=WEEKLY;INTERVAL=2
+   - "every Monday" → FREQ=WEEKLY;INTERVAL=1;BYDAY=MO
+   - "every month" or "monthly" → FREQ=MONTHLY;INTERVAL=1
+   - "monthly on the 15th" → FREQ=MONTHLY;INTERVAL=1;BYMONTHDAY=15
+   - "quarterly" or "every 3 months" → FREQ=MONTHLY;INTERVAL=3
+   - "quarterly on the 1st" → FREQ=MONTHLY;INTERVAL=3;BYMONTHDAY=1
+   - "every 6 months" or "twice a year" → FREQ=MONTHLY;INTERVAL=6
+   - "every year" or "annually" → FREQ=YEARLY;INTERVAL=1
+   - "every year in November" → FREQ=YEARLY;INTERVAL=1;BYMONTH=11
+   - "every 90 days" → FREQ=DAILY;INTERVAL=90
    - Only set recurrenceRule when recurrence is explicitly stated
+   - When setting recurrenceRule, also set leadTimeDays: weekly=1, monthly=3, quarterly=7, yearly=21
 10. Vague date resolution — when the user gives a vague time reference, resolve to the first day of that unit:
    - "April" → April 1 of the current year (or next year if April has already passed)
    - "2027" → January 1, 2027
@@ -206,10 +220,15 @@ export async function parseActionText(text: string, activeRuleInstructions: stri
       missingInfo: string[]
       isWaiting?: boolean
       recurrenceRule?: string
+      leadTimeDays?: number
     }
 
     const commitmentConfidence = result.commitment_confidence
     const parseConfidence = result.parse_confidence
+
+    // Resolve leadTimeDays: AI suggestion > recurrence-based suggestion > default 21
+    const leadTimeDays = result.leadTimeDays
+      ?? (result.recurrenceRule ? suggestLeadTimeDays(result.recurrenceRule) : 21)
 
     // Determine container based on confidence and completeness
     const container = determineContainer({
@@ -217,7 +236,8 @@ export async function parseActionText(text: string, activeRuleInstructions: stri
       missingInfo: result.missingInfo || [],
       isWaiting: result.isWaiting,
       hasAction: result.hasAction,
-      dueDate: result.dueDate || null
+      dueDate: result.dueDate || null,
+      leadTimeDays
     })
 
     // Auto-create trigger data for WAITING items with a future dueDate
@@ -225,11 +245,11 @@ export async function parseActionText(text: string, activeRuleInstructions: stri
     if (container === 'WAITING' && result.dueDate) {
       const dueDate = new Date(result.dueDate)
       const now = new Date()
-      const twentyOneDaysBefore = new Date(dueDate)
-      twentyOneDaysBefore.setDate(twentyOneDaysBefore.getDate() - 21)
+      const leadBefore = new Date(dueDate)
+      leadBefore.setDate(leadBefore.getDate() - leadTimeDays)
 
-      // If 21 days before dueDate is in the future, use it; otherwise use dueDate itself
-      const triggerDate = twentyOneDaysBefore > now ? twentyOneDaysBefore : dueDate
+      // If lead-time date is in the future, use it; otherwise use dueDate itself
+      const triggerDate = leadBefore > now ? leadBefore : dueDate
       autoTrigger = {
         type: 'DATE_EXACT',
         triggerDate: triggerDate.toISOString().split('T')[0]
@@ -250,6 +270,7 @@ export async function parseActionText(text: string, activeRuleInstructions: stri
       missingInfo: result.missingInfo || [],
       container,
       recurrenceRule: result.recurrenceRule || null,
+      leadTimeDays,
       autoTrigger
     }
   } catch (error) {
@@ -269,7 +290,8 @@ export async function parseActionText(text: string, activeRuleInstructions: stri
       triggers: [],
       missingInfo: ['AI parsing failed - please review manually'],
       container: 'CANDIDATES',
-      recurrenceRule: null
+      recurrenceRule: null,
+      leadTimeDays: 21
     }
   }
 }
@@ -280,6 +302,7 @@ function determineContainer(result: {
   isWaiting?: boolean
   hasAction: boolean
   dueDate: string | null
+  leadTimeDays: number
 }): Container {
   // Low commitment confidence — probably not a real action
   if (result.commitmentConfidence < 0.3) {
@@ -296,13 +319,13 @@ function determineContainer(result: {
     return 'WAITING'
   }
 
-  // Due date is more than 21 days in the future → park in WAITING
+  // Due date is more than leadTimeDays in the future → park in WAITING
   if (result.dueDate) {
     const dueDate = new Date(result.dueDate)
     const now = new Date()
     const diffMs = dueDate.getTime() - now.getTime()
     const diffDays = diffMs / (1000 * 60 * 60 * 24)
-    if (diffDays > 21) {
+    if (diffDays > result.leadTimeDays) {
       return 'WAITING'
     }
   }

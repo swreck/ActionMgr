@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { URGENCY_LABELS, CONTAINER_LABELS, Container } from '../types'
 import { parsePreview, parseConfirm, parseClarify, ParsedActionPreview } from '../api/client'
+import { formatRecurrenceLabel } from '../utils/recurrence'
 
 interface QuickCaptureProps {
   onClose: () => void
@@ -223,6 +224,16 @@ export default function QuickCapture({ onClose, onCreated }: QuickCaptureProps) 
                 </div>
               )}
 
+              {preview.recurrenceRule && (
+                <div className="preview-recurrence">
+                  <span className="preview-meta-label">Repeats</span>
+                  <span className="preview-recurrence-value">↻ {formatRecurrenceLabel(preview.recurrenceRule)}</span>
+                  {preview.leadTimeDays !== undefined && (
+                    <span className="preview-lead-time">(surfaces {preview.leadTimeDays} days before due)</span>
+                  )}
+                </div>
+              )}
+
               {preview.reasoning && (
                 <div className="preview-reasoning">
                   <span className="preview-meta-label">AI Reasoning</span>
@@ -366,6 +377,23 @@ export default function QuickCapture({ onClose, onCreated }: QuickCaptureProps) 
             padding: 4px 10px;
             border-radius: 12px;
             font-size: 13px;
+          }
+          .preview-recurrence {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-top: 12px;
+            padding: 10px 12px;
+            background: var(--bg-card);
+            border-radius: 8px;
+          }
+          .preview-recurrence-value {
+            font-size: 14px;
+            font-weight: 500;
+          }
+          .preview-lead-time {
+            font-size: 12px;
+            color: var(--text-secondary);
           }
           .preview-reasoning {
             margin-top: 16px;

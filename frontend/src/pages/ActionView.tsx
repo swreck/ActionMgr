@@ -4,62 +4,7 @@ import { getAction, updateAction, completeAction, moveAction, getTriggers, submi
 import InfoPanel from '../components/InfoPanel'
 import TriggerCard from '../components/TriggerCard'
 import AddTriggerModal from '../components/AddTriggerModal'
-
-// Returns an ISO YYYY-MM-DD string for the next occurrence given a recurrenceRule.
-// Uses today as the reference point; preserves original due day-of-month where applicable.
-function calculateNextOccurrence(rule: string, originalDueDate: Date | null): string {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  if (rule === 'YEARLY') {
-    const next = new Date(originalDueDate || today)
-    next.setFullYear(next.getFullYear() + 1)
-    return next.toISOString().split('T')[0]
-  }
-
-  if (rule.startsWith('YEARLY_')) {
-    const targetMonth = parseInt(rule.split('_')[1]) - 1 // 0-indexed
-    const next = new Date(today)
-    next.setMonth(targetMonth)
-    // Preserve original day if it was in the same month, else use 1st
-    const origDay = originalDueDate && originalDueDate.getMonth() === targetMonth
-      ? originalDueDate.getDate()
-      : 1
-    next.setDate(origDay)
-    if (next <= today) {
-      next.setFullYear(next.getFullYear() + 1)
-      next.setMonth(targetMonth)
-      next.setDate(origDay)
-    }
-    return next.toISOString().split('T')[0]
-  }
-
-  if (rule === 'MONTHLY') {
-    const next = new Date(today)
-    next.setMonth(next.getMonth() + 1)
-    return next.toISOString().split('T')[0]
-  }
-
-  if (rule === 'WEEKLY') {
-    const next = new Date(today)
-    next.setDate(next.getDate() + 7)
-    return next.toISOString().split('T')[0]
-  }
-
-  if (rule === 'EVERY_6_MONTHS') {
-    const next = new Date(today)
-    next.setMonth(next.getMonth() + 6)
-    return next.toISOString().split('T')[0]
-  }
-
-  if (rule === 'EVERY_90_DAYS') {
-    const next = new Date(today)
-    next.setDate(next.getDate() + 90)
-    return next.toISOString().split('T')[0]
-  }
-
-  return ''
-}
+import { formatRecurrenceLabel } from '../utils/recurrence'
 
 interface ActionViewProps {
   actionId: number
@@ -76,7 +21,9 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
   const [showAddTrigger, setShowAddTrigger] = useState(false)
   const [showFeedback, setShowFeedback] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
-  const [showRepeatPrompt, setShowRepeatPrompt] = useState(false)
+  const [nextCreatedMsg, setNextCreatedMsg] = useState<string | null>(null)
+  const [editingLeadTime, setEditingLeadTime] = useState(false)
+  const [leadTimeValue, setLeadTimeValue] = useState('')
 
   // Edit form state
   const [description, setDescription] = useState('')
@@ -84,23 +31,11 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
   const [dueDate, setDueDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [reparsing, setReparsing] = useState(false)
-  const [repeatDate, setRepeatDate] = useState('')
   const [showReclassify, setShowReclassify] = useState(false)
   const [showDatePicker, setShowDatePicker] = useState<'defer' | 'reschedule' | null>(null)
   const [datePickerValue, setDatePickerValue] = useState('')
   const [feedbackPicker, setFeedbackPicker] = useState<'urgency' | 'container' | null>(null)
   const [feedbackPickerValue, setFeedbackPickerValue] = useState('')
-
-  // When repeat prompt opens, auto-fill next date from recurrenceRule
-  useEffect(() => {
-    if (showRepeatPrompt && action?.recurrenceRule) {
-      const next = calculateNextOccurrence(
-        action.recurrenceRule,
-        action.dueDate ? new Date(action.dueDate) : null
-      )
-      if (next) setRepeatDate(next)
-    }
-  }, [showRepeatPrompt])
 
   useEffect(() => {
     loadAction()
@@ -171,35 +106,43 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
     }
   }
 
-  async function handleComplete(repeat = false) {
+  async function handleComplete() {
     if (!action) return
 
     try {
-      await completeAction(action.id)
+      const result = await completeAction(action.id)
 
-      if (repeat && repeatDate) {
-        const { createAction } = await import('../api/client')
-        const newAction = await createAction({
-          description: action.description,
-          urgency: action.urgency,
-          dueDate: repeatDate
-        })
-        await createTrigger({
-          actionId: newAction.id,
-          type: 'DATE_EXACT',
-          description: `Repeat of action #${action.id}`,
-          triggerDate: repeatDate
-        })
-        await moveAction(newAction.id, 'WAITING')
+      if (result.nextAction) {
+        const nextDue = result.nextAction.dueDate
+          ? new Date(result.nextAction.dueDate).toLocaleDateString()
+          : 'scheduled'
+        setNextCreatedMsg(`Next occurrence created (due ${nextDue})`)
+        setTimeout(() => {
+          onUpdate()
+          onClose()
+        }, 2000)
+      } else {
+        onUpdate()
+        onClose()
       }
-
-      onUpdate()
-      onClose()
     } catch (err) {
       console.error('Failed to complete:', err)
     }
-    setShowRepeatPrompt(false)
-    setRepeatDate('')
+  }
+
+  async function handleSaveLeadTime() {
+    if (!action) return
+    const days = parseInt(leadTimeValue)
+    if (isNaN(days) || days < 0 || days > 90) return
+
+    try {
+      await updateAction(action.id, { leadTimeDays: days, version: action.version })
+      setEditingLeadTime(false)
+      loadAction()
+      onUpdate()
+    } catch (err) {
+      console.error('Failed to update lead time:', err)
+    }
   }
 
   async function handleConfirm() {
@@ -504,6 +447,42 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                     </span>
                   </div>
                 )}
+                {action.recurrenceRule && (
+                  <div className="detail-row">
+                    <span className="detail-label">Repeats</span>
+                    <span className="detail-value">
+                      ↻ {formatRecurrenceLabel(action.recurrenceRule)}
+                    </span>
+                  </div>
+                )}
+                {action.recurrenceRule && (
+                  <div className="detail-row">
+                    <span className="detail-label">Lead time</span>
+                    {editingLeadTime ? (
+                      <span className="detail-value lead-time-edit">
+                        <input
+                          type="number"
+                          min="0"
+                          max="90"
+                          className="lead-time-input"
+                          value={leadTimeValue}
+                          onChange={(e) => setLeadTimeValue(e.target.value)}
+                          autoFocus
+                        />
+                        <span className="lead-time-unit">days</span>
+                        <button className="lead-time-save" onClick={handleSaveLeadTime}>Save</button>
+                        <button className="lead-time-cancel" onClick={() => setEditingLeadTime(false)}>Cancel</button>
+                      </span>
+                    ) : (
+                      <span
+                        className="detail-value detail-value-editable"
+                        onClick={() => { setLeadTimeValue(String(action.leadTimeDays)); setEditingLeadTime(true) }}
+                      >
+                        {action.leadTimeDays} days
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Triggers Section */}
@@ -650,41 +629,16 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
               <button className="btn btn-secondary" onClick={() => setEditing(true)}>
                 Edit
               </button>
-              {triggers.length > 0 && !showRepeatPrompt ? (
-                <button
-                  className="btn btn-success"
-                  onClick={() => setShowRepeatPrompt(true)}
-                >
-                  Complete
-                </button>
-              ) : !showRepeatPrompt ? (
-                <button className="btn btn-success" onClick={() => handleComplete()}>
-                  Complete
-                </button>
-              ) : null}
-              {showRepeatPrompt && (
-                <div className="repeat-prompt">
-                  <span className="repeat-prompt-label">Schedule next?</span>
-                  <input
-                    type="date"
-                    className="form-input"
-                    value={repeatDate}
-                    onChange={(e) => setRepeatDate(e.target.value)}
-                    style={{ padding: '8px 10px', fontSize: '13px', flex: 1, minWidth: 0 }}
-                  />
-                  <button
-                    className="btn btn-secondary repeat-prompt-btn"
-                    onClick={() => handleComplete(true)}
-                    disabled={!repeatDate}
-                  >
-                    Schedule
-                  </button>
-                  <button className="btn btn-success repeat-prompt-btn" onClick={() => handleComplete(false)}>
-                    Done
-                  </button>
-                </div>
-              )}
+              <button className="btn btn-success" onClick={handleComplete}>
+                Complete{action.recurrenceRule ? ' & Schedule Next' : ''}
+              </button>
             </div>
+
+            {nextCreatedMsg && (
+              <div className="next-created-banner">
+                {nextCreatedMsg}
+              </div>
+            )}
 
             <button
               className="feedback-btn"
@@ -964,21 +918,58 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             background: rgba(255,255,255,0.1);
             margin: 8px 0;
           }
-          .repeat-prompt {
+          .detail-value-editable {
+            cursor: pointer;
+            border-bottom: 1px dashed var(--text-secondary);
+          }
+          .detail-value-editable:hover {
+            color: var(--accent);
+            border-bottom-color: var(--accent);
+          }
+          .lead-time-edit {
             display: flex;
             align-items: center;
-            gap: 8px;
-            flex: 2;
-            flex-wrap: wrap;
+            gap: 6px;
           }
-          .repeat-prompt-label {
+          .lead-time-input {
+            width: 50px;
+            padding: 4px 6px;
+            font-size: 13px;
+            border: 1px solid var(--separator);
+            border-radius: 4px;
+            background: var(--bg-elevated);
+            color: var(--text-primary);
+            text-align: center;
+          }
+          .lead-time-unit {
             font-size: 13px;
             color: var(--text-secondary);
-            white-space: nowrap;
           }
-          .repeat-prompt-btn {
-            padding: 10px 14px;
+          .lead-time-save, .lead-time-cancel {
+            padding: 3px 8px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+          }
+          .lead-time-save {
+            background: var(--accent);
+            color: white;
+          }
+          .lead-time-cancel {
+            background: transparent;
+            color: var(--text-secondary);
+          }
+          .next-created-banner {
+            background: rgba(52, 199, 89, 0.15);
+            border: 1px solid rgba(52, 199, 89, 0.3);
+            border-radius: 8px;
+            padding: 10px 12px;
+            margin-top: 12px;
             font-size: 13px;
+            color: var(--success);
+            text-align: center;
+            font-weight: 500;
           }
           .followup-nudge-section {
             background: rgba(251, 191, 36, 0.1);

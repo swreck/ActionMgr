@@ -23,18 +23,20 @@ export function initializeScheduler(): void {
     await checkTriggers()
   })
 
-  // Follow-up check + WAITING safety net: daily at 9 AM
+  // Follow-up check + WAITING safety net + missed recurrence: daily at 9 AM
   cron.schedule('0 9 * * *', async () => {
     console.log('Running follow-up check...')
     await checkFollowUps()
     console.log('Running WAITING safety net check...')
     await checkWaitingSafety()
+    console.log('Running missed recurrence trigger check...')
+    await checkMissedRecurrenceTriggers()
   })
 
   console.log('Scheduler initialized with jobs:')
   console.log('  - Gmail scan: every 4 hours')
   console.log('  - Trigger check: every hour')
-  console.log('  - Follow-up check + WAITING safety net: 9 AM daily')
+  console.log('  - Follow-up check + WAITING safety net + missed recurrence: 9 AM daily')
 }
 
 /**
@@ -392,6 +394,57 @@ async function checkWaitingSafety(): Promise<void> {
     console.log(`Flagged ${toFlag.length} WAITING actions with no active trigger for clarification`)
   } catch (err) {
     console.error('WAITING safety net check failed:', err)
+  }
+}
+
+/**
+ * Catch WAITING recurring actions whose due date has passed
+ * without their trigger firing. Moves them to ACTIONABLE_NOW.
+ */
+async function checkMissedRecurrenceTriggers(): Promise<void> {
+  try {
+    const now = new Date()
+
+    // Find WAITING recurring actions with a past due date
+    const missedActions = await prisma.action.findMany({
+      where: {
+        container: 'WAITING',
+        archivedAt: null,
+        completedAt: null,
+        recurrenceRule: { not: null },
+        dueDate: { lte: now }
+      }
+    })
+
+    let movedCount = 0
+
+    for (const action of missedActions) {
+      await prisma.action.update({
+        where: { id: action.id },
+        data: {
+          container: 'ACTIONABLE_NOW',
+          version: { increment: 1 }
+        }
+      })
+
+      await prisma.actionEvent.create({
+        data: {
+          actionId: action.id,
+          type: 'CONTAINER_CHANGE',
+          fromContainer: 'WAITING',
+          toContainer: 'ACTIONABLE_NOW',
+          details: JSON.stringify({
+            reason: 'Missed recurrence trigger — due date passed while in WAITING'
+          })
+        }
+      })
+
+      movedCount++
+    }
+
+    console.log(`Missed recurrence check: moved ${movedCount} overdue recurring actions to ACTIONABLE_NOW`)
+  } catch (err) {
+    console.error('Missed recurrence trigger check failed:', err)
   }
 }
 

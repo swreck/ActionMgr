@@ -55,6 +55,7 @@ export interface UpdateActionInput {
   urgency?: Urgency
   dueDate?: string | null
   container?: Container
+  leadTimeDays?: number
   version: number
 }
 
@@ -65,8 +66,12 @@ export async function updateAction(id: number, input: UpdateActionInput): Promis
   })
 }
 
-export async function completeAction(id: number): Promise<Action> {
-  return request<Action>(`/actions/${id}/complete`, {
+export interface CompleteActionResult extends Action {
+  nextAction?: Action | null
+}
+
+export async function completeAction(id: number): Promise<CompleteActionResult> {
+  return request<CompleteActionResult>(`/actions/${id}/complete`, {
     method: 'POST'
   })
 }
@@ -130,6 +135,7 @@ export interface ParsedActionPreview {
   questions: string[]
   rawInput: string
   recurrenceRule: string | null
+  leadTimeDays?: number
 }
 
 export async function parsePreview(text: string): Promise<ParsedActionPreview> {

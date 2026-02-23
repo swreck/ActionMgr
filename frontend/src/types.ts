@@ -20,6 +20,7 @@ export interface Action {
   rawInput: string
   aiReasoning: string | null
   recurrenceRule: string | null
+  leadTimeDays: number
   createdAt: string
   updatedAt: string
   completedAt: string | null
