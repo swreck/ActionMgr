@@ -27,6 +27,7 @@ export default function AmbiguityResolver({ actionId, onClose, onResolved }: Amb
       // Generate initial questions based on the action
       const initialPreview: ParsedActionPreview = {
         description: data.description,
+        shortDescription: data.shortDescription,
         suggestedAction: data.suggestedAction,
         urgency: data.urgency,
         dueDate: data.dueDate,

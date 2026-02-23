@@ -321,10 +321,37 @@ body {
   cursor: pointer;
   transition: transform 0.15s ease;
   box-shadow: 0 1px 4px var(--shadow);
+  user-select: none;
+  position: relative;
+  overflow: hidden;
 }
 
 .action-card:active {
   transform: scale(0.98);
+}
+
+.action-card-delete-bg {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 120px;
+  background: var(--urgency-critical);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.action-card-inner {
+  position: relative;
+  z-index: 1;
+  background: var(--bg-card);
+  display: flex;
+  gap: 12px;
+  width: 100%;
 }
 
 .action-urgency-bar {
@@ -348,6 +375,12 @@ body {
   font-weight: 400;
   margin-bottom: 4px;
   line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  user-select: text;
 }
 
 .action-suggested {
@@ -496,6 +529,7 @@ body {
   cursor: pointer;
   font-family: inherit;
   transition: opacity 0.2s ease;
+  text-align: center;
 }
 
 .btn:active {

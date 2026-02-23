@@ -123,6 +123,7 @@ export async function runTriggerCheck(): Promise<{ success: boolean; message: st
 // Parse endpoints
 export interface ParsedActionPreview {
   description: string
+  shortDescription: string | null
   suggestedAction: string | null
   urgency: Urgency
   dueDate: string | null

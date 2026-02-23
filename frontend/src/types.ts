@@ -12,6 +12,7 @@ export type SourceType = 'GMAIL' | 'SIRI' | 'MANUAL'
 export interface Action {
   id: number
   description: string
+  shortDescription: string | null
   suggestedAction: string | null
   container: Container
   urgency: Urgency

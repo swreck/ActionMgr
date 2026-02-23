@@ -36,6 +36,9 @@ interface EmailContent {
   body: string
   date: Date
   labels: string[]
+  listUnsubscribe: string
+  listId: string
+  precedence: string
 }
 
 interface ScanResult {
@@ -211,6 +214,9 @@ function parseEmailContent(message: gmail_v1.Schema$Message): EmailContent | nul
   }
 
   const labels = message.labelIds || []
+  const listUnsubscribe = getHeader('List-Unsubscribe')
+  const listId = getHeader('List-Id')
+  const precedence = getHeader('Precedence')
 
   return {
     id: message.id,
@@ -219,7 +225,10 @@ function parseEmailContent(message: gmail_v1.Schema$Message): EmailContent | nul
     subject,
     body,
     date,
-    labels
+    labels,
+    listUnsubscribe,
+    listId,
+    precedence
   }
 }
 
@@ -328,6 +337,7 @@ async function processEmail(email: EmailContent): Promise<ParsedAction | null> {
   const action = await prisma.action.create({
     data: {
       description: parsed.description,
+      shortDescription: parsed.shortDescription || null,
       suggestedAction: parsed.suggestedAction,
       rawInput: textToAnalyze,
       container: parsed.container,
@@ -580,11 +590,69 @@ function isLikelyNotActionable(email: EmailContent): boolean {
     'thanks for signing up',
     'order confirmation',
     'shipping notification',
-    'delivery notification'
+    'delivery notification',
+    'digest',
+    'weekly update',
+    'monthly update',
+    'daily summary',
+    'notification',
+    'automated',
+    'auto-generated',
+    'receipt',
+    'invoice',
+    'statement',
+    'payment received',
+    'subscription',
+    'renewal',
+    'billing',
+    'your order',
+    'track your',
+    'tracking number',
+    'security alert',
+    'sign-in',
+    'login attempt',
+    'promo',
+    'promotion',
+    'sale',
+    'discount',
+    'coupon',
+    'deal',
+    'survey',
+    'feedback request',
+    'rate your',
+    'review your experience'
   ]
 
   for (const pattern of skipPatterns) {
     if (lowerSubject.includes(pattern) || lowerFrom.includes(pattern)) {
+      return true
+    }
+  }
+
+  // Skip mailing list emails (List-Unsubscribe, List-Id, or Precedence: bulk/list)
+  if (email.listUnsubscribe || email.listId) {
+    return true
+  }
+  const lowerPrecedence = email.precedence.toLowerCase()
+  if (lowerPrecedence === 'bulk' || lowerPrecedence === 'list') {
+    return true
+  }
+
+  // Skip common automated sender prefixes
+  const automatedSenderPrefixes = [
+    'notifications@',
+    'updates@',
+    'news@',
+    'marketing@',
+    'support@',
+    'info@',
+    'hello@',
+    'team@',
+    'mailer-daemon',
+    'postmaster'
+  ]
+  for (const prefix of automatedSenderPrefixes) {
+    if (lowerFrom.includes(prefix)) {
       return true
     }
   }

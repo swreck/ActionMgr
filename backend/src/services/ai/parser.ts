@@ -5,6 +5,7 @@ import { suggestLeadTimeDays } from '../recurrence'
 // Parsed action result from AI
 export interface ParsedAction {
   description: string
+  shortDescription: string | null
   suggestedAction: string | null
   urgency: Urgency
   dueDate: string | null // ISO date string
@@ -35,6 +36,10 @@ const extractActionTool = {
       description: {
         type: 'string',
         description: 'Clear, concise description of what needs to be done'
+      },
+      shortDescription: {
+        type: 'string',
+        description: 'A 6-10 word summary of the action for compact display. Focus on the core task, drop context. Example: description "Call John at Acme Corp to discuss the Q2 project timeline review" → shortDescription "Call John re Q2 timeline"'
       },
       suggestedAction: {
         type: 'string',
@@ -171,6 +176,7 @@ Guidelines:
    - "this summer" → June 21 of the current year
    - "end of year" → December 31 of the current year
    Always return a specific date in the dueDate field when any time reference is given, even vague ones.
+11. Location-based triggers: If the user's input mentions a specific location or place as a trigger (e.g., "when I'm at Costco", "next time I'm near the office"), note that this app cannot do location-based reminders. Set the suggestedAction to: "Set a location reminder in Apple Reminders: [location]" and include a brief note in reasoning explaining that geo-fencing is not supported in this web app.
 
 Today is ${getDayName(new Date())}, ${new Date().toISOString().split('T')[0]}.`
 
@@ -209,6 +215,7 @@ export async function parseActionText(text: string, activeRuleInstructions: stri
     const result = toolUse.input as {
       hasAction: boolean
       description: string
+      shortDescription?: string
       suggestedAction?: string
       urgency: string
       dueDate?: string
@@ -258,6 +265,7 @@ export async function parseActionText(text: string, activeRuleInstructions: stri
 
     return {
       description: result.description,
+      shortDescription: result.shortDescription || null,
       suggestedAction: result.suggestedAction || null,
       urgency: result.urgency as Urgency,
       dueDate: result.dueDate || null,
@@ -279,6 +287,7 @@ export async function parseActionText(text: string, activeRuleInstructions: stri
     // Fallback: return basic parsed result
     return {
       description: text,
+      shortDescription: null,
       suggestedAction: null,
       urgency: 'MEDIUM',
       dueDate: null,

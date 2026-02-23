@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Action, Container, CONTAINER_LABELS } from '../types'
-import { getActions, getActionsByFlag, bulkCompleteActions, bulkDeleteActions, bulkMoveActions } from '../api/client'
+import { getActions, getActionsByFlag, deleteAction, bulkCompleteActions, bulkDeleteActions, bulkMoveActions } from '../api/client'
 import ActionCard from '../components/ActionCard'
 import { refreshCounts } from '../components/ContainerNav'
 import QuickCapture from '../components/QuickCapture'
@@ -142,6 +142,16 @@ export default function Feed({ activeContainer, flagFilter, onDataChange }: Feed
     }
   }
 
+  async function handleSwipeDelete(id: number) {
+    try {
+      await deleteAction(id)
+      loadActions()
+      refreshCounts()
+    } catch (err) {
+      console.error('Swipe delete failed:', err)
+    }
+  }
+
   function exitSelectionAndRefresh() {
     setSelectionMode(false)
     setSelectedIds(new Set())
@@ -201,6 +211,7 @@ export default function Feed({ activeContainer, flagFilter, onDataChange }: Feed
           <ActionCard
             key={action.id}
             action={action}
+            onDelete={handleSwipeDelete}
             selectable={selectionMode}
             selected={selectedIds.has(action.id)}
             onSelect={toggleSelect}

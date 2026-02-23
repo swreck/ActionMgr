@@ -13,8 +13,9 @@ model Action {
   id              Int             @id @default(autoincrement())
 
   // Core fields
-  description     String
-  suggestedAction String?
+  description      String
+  shortDescription String?
+  suggestedAction  String?
 
   // Classification
   container       Container       @default(CANDIDATES)

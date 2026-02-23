@@ -47,6 +47,7 @@ router.post('/confirm', async (req: Request, res: Response, next: NextFunction) 
     const {
       rawInput,
       description,
+      shortDescription,
       suggestedAction,
       urgency,
       dueDate,
@@ -77,6 +78,7 @@ router.post('/confirm', async (req: Request, res: Response, next: NextFunction) 
     const action = await prisma.action.create({
       data: {
         description,
+        shortDescription: shortDescription || null,
         suggestedAction,
         rawInput,
         urgency: urgency || 'MEDIUM',
@@ -252,6 +254,7 @@ router.post('/:id/reparse', async (req: Request, res: Response, next: NextFuncti
       where: { id },
       data: {
         description: parsed.description,
+        shortDescription: parsed.shortDescription || null,
         suggestedAction: parsed.suggestedAction,
         urgency: parsed.urgency,
         dueDate: parsed.dueDate ? new Date(parsed.dueDate) : null,
@@ -313,6 +316,7 @@ router.post('/siri', async (req: Request, res: Response, next: NextFunction) => 
     const action = await prisma.action.create({
       data: {
         description: parsed.description,
+        shortDescription: parsed.shortDescription || null,
         suggestedAction: parsed.suggestedAction,
         rawInput: text.trim(),
         urgency: parsed.urgency,
