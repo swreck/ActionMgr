@@ -81,7 +81,7 @@ export default function ActionCard({ action, onClick, onDelete, selectable, sele
 
   return (
     <div className="action-card" onClick={handleCardClick}>
-      <div className="action-card-delete-bg">Delete</div>
+      {swipeDelta < -10 && <div className="action-card-delete-bg">Delete</div>}
       <div
         className="action-card-inner"
         style={{
