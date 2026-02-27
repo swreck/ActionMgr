@@ -57,6 +57,8 @@ export interface UpdateActionInput {
   container?: Container
   leadTimeDays?: number
   recurrenceRule?: string | null
+  needsTuning?: boolean
+  needsClarification?: boolean
   version: number
 }
 

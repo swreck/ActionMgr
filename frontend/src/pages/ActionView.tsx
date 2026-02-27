@@ -736,8 +736,17 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
 
             <div className="action-view-buttons">
               <button className="btn btn-secondary" onClick={onClose}>
-                Done
+                Close
               </button>
+              {action.needsTuning && (
+                <button className="btn btn-primary" onClick={async () => {
+                  await updateAction(action.id, { needsTuning: false, version: action.version })
+                  onUpdate?.()
+                  onClose()
+                }}>
+                  Looks Good
+                </button>
+              )}
               {action.container === 'CANDIDATES' && (
                 <button className="btn btn-primary" onClick={handleConfirm}>
                   Move to Now
