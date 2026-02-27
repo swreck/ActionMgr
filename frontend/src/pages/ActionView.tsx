@@ -52,6 +52,21 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
     loadAction()
   }, [actionId])
 
+  // Tap anywhere outside a menu/picker to dismiss it
+  useEffect(() => {
+    const anyOpen = showMenu || showReclassify || showFeedback || showRecurrencePicker
+    if (!anyOpen) return
+    function handleClick() {
+      setShowMenu(false)
+      setShowReclassify(false)
+      setShowFeedback(false)
+      setShowRecurrencePicker(false)
+      setFeedbackPicker(null)
+    }
+    const timer = setTimeout(() => document.addEventListener('click', handleClick), 0)
+    return () => { clearTimeout(timer); document.removeEventListener('click', handleClick) }
+  }, [showMenu, showReclassify, showFeedback, showRecurrencePicker])
+
   async function loadAction() {
     try {
       const [actionData, triggerData] = await Promise.all([
@@ -125,11 +140,11 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
         const nextDue = result.nextAction.dueDate
           ? new Date(result.nextAction.dueDate).toLocaleDateString()
           : 'scheduled'
-        setNextCreatedMsg(`Next occurrence created (due ${nextDue})`)
+        setNextCreatedMsg(`Marked complete. Next occurrence scheduled for ${nextDue}.`)
         setTimeout(() => {
           onUpdate()
           onClose()
-        }, 2000)
+        }, 3000)
       } else {
         onUpdate()
         onClose()
@@ -345,7 +360,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                 ⋯
               </button>
               {showMenu && (
-                <div className="action-menu">
+                <div className="action-menu" onClick={e => e.stopPropagation()}>
                   <button className="action-menu-item" onClick={handleDefer}>Defer</button>
                   <button className="action-menu-item" onClick={handleReclassify}>Reclassify</button>
                   <button className="action-menu-item" onClick={handleMergeClick}>Merge</button>
@@ -437,6 +452,18 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                 </div>
               )}
 
+              {/* Waiting summary — shows the AI's routing plan at a glance */}
+              {action.container === 'WAITING' && (action.recurrenceRule || pendingTriggers.length > 0) && (
+                <div className="waiting-summary">
+                  {[
+                    action.recurrenceRule && `↻ ${formatRecurrenceLabel(action.recurrenceRule)}`,
+                    pendingTriggers.length > 0 && pendingTriggers[0].triggerDate &&
+                      `Waiting until ${new Date(pendingTriggers[0].triggerDate).toLocaleDateString()}`,
+                    action.dueDate && `Due ${new Date(action.dueDate).toLocaleDateString()}`
+                  ].filter(Boolean).join('  ·  ')}
+                </div>
+              )}
+
               {/* Source attribution */}
               <div className="action-detail-source">
                 {action.source?.type === 'GMAIL' ? (
@@ -523,7 +550,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                   </span>
                 </div>
                 {showRecurrencePicker && (
-                  <div className="recurrence-picker-inline">
+                  <div className="recurrence-picker-inline" onClick={e => e.stopPropagation()}>
                     <div className="picker-grid picker-grid--3col">
                       {([
                         { label: 'Weekly', rule: 'FREQ=WEEKLY;INTERVAL=1', lead: 1 },
@@ -708,24 +735,19 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             )}
 
             <div className="action-view-buttons">
+              <button className="btn btn-secondary" onClick={onClose}>
+                Done
+              </button>
               {action.container === 'CANDIDATES' && (
                 <button className="btn btn-primary" onClick={handleConfirm}>
                   Move to Now
-                </button>
-              )}
-              {action.container !== 'WAITING' && (
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => setShowAddTrigger(true)}
-                >
-                  Add Trigger
                 </button>
               )}
               <button className="btn btn-secondary" onClick={() => setEditing(true)}>
                 Edit
               </button>
               <button className="btn btn-success" onClick={handleComplete}>
-                Complete{action.recurrenceRule ? ' & Schedule Next' : ''}
+                Mark Complete{action.recurrenceRule ? ' & Next' : ''}
               </button>
             </div>
 
@@ -743,7 +765,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             </button>
 
             {showFeedback && (
-              <div className="feedback-panel">
+              <div className="feedback-panel" onClick={e => e.stopPropagation()}>
                 <p className="feedback-title">What was wrong?</p>
                 <div className="feedback-options">
                   {feedbackPicker === 'urgency' ? (
@@ -843,7 +865,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             )}
 
             {showReclassify && (
-              <div className="reclassify-panel">
+              <div className="reclassify-panel" onClick={e => e.stopPropagation()}>
                 <p className="feedback-title">Move to container:</p>
                 <div className="picker-grid">
                   {containerOptions.map(c => (
@@ -961,12 +983,12 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
           .action-menu-item {
             display: block;
             width: 100%;
-            padding: 12px 16px;
+            padding: 16px 20px;
             background: none;
             border: none;
             border-bottom: 1px solid rgba(255,255,255,0.05);
             color: var(--text-primary);
-            font-size: 14px;
+            font-size: 16px;
             text-align: left;
             cursor: pointer;
           }
@@ -983,13 +1005,13 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             background: rgba(239, 68, 68, 0.1);
           }
           .action-info-btn {
-            width: 28px;
-            height: 28px;
-            border-radius: 14px;
+            width: 38px;
+            height: 38px;
+            border-radius: 19px;
             border: 1px solid var(--text-secondary);
             background: transparent;
             color: var(--text-secondary);
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 600;
             cursor: pointer;
           }
@@ -1009,7 +1031,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             margin-bottom: 12px;
           }
           .clarification-title {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 600;
             color: var(--warning);
             margin-bottom: 4px;
@@ -1019,17 +1041,17 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             padding-left: 20px;
           }
           .clarification-item {
-            font-size: 13px;
+            font-size: 16px;
             color: var(--text-primary);
             line-height: 1.6;
           }
           .clarification-detail {
-            font-size: 13px;
+            font-size: 16px;
             color: var(--text-secondary);
             line-height: 1.4;
           }
           .action-detail-suggested {
-            font-size: 14px;
+            font-size: 16px;
             color: var(--text-secondary);
             padding: 12px;
             background: var(--bg-card);
@@ -1052,11 +1074,11 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
           }
           .detail-label {
             color: var(--text-secondary);
-            font-size: 14px;
+            font-size: 16px;
           }
           .detail-value {
             font-weight: 500;
-            font-size: 14px;
+            font-size: 16px;
           }
           .urgency-critical { color: var(--urgency-critical); }
           .urgency-high { color: var(--urgency-high); }
@@ -1072,7 +1094,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             margin-bottom: 8px;
           }
           .triggers-header h3 {
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 600;
             color: var(--text-secondary);
           }
@@ -1080,12 +1102,12 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             background: none;
             border: none;
             color: var(--accent);
-            font-size: 13px;
+            font-size: 16px;
             font-weight: 600;
             cursor: pointer;
           }
           .no-triggers {
-            font-size: 13px;
+            font-size: 16px;
             color: var(--text-secondary);
             padding: 12px;
             background: var(--bg-card);
@@ -1111,9 +1133,9 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             gap: 6px;
           }
           .lead-time-input {
-            width: 50px;
-            padding: 4px 6px;
-            font-size: 13px;
+            width: 60px;
+            padding: 6px 8px;
+            font-size: 16px;
             border: 1px solid var(--separator);
             border-radius: 4px;
             background: var(--bg-elevated);
@@ -1121,12 +1143,12 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             text-align: center;
           }
           .lead-time-unit {
-            font-size: 13px;
+            font-size: 16px;
             color: var(--text-secondary);
           }
           .lead-time-save, .lead-time-cancel {
-            padding: 3px 8px;
-            font-size: 12px;
+            padding: 6px 12px;
+            font-size: 16px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
@@ -1143,9 +1165,9 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             background: rgba(52, 199, 89, 0.15);
             border: 1px solid rgba(52, 199, 89, 0.3);
             border-radius: 8px;
-            padding: 10px 12px;
+            padding: 14px 16px;
             margin-top: 12px;
-            font-size: 13px;
+            font-size: 16px;
             color: var(--success);
             text-align: center;
             font-weight: 500;
@@ -1164,7 +1186,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             margin-bottom: 4px;
           }
           .followup-nudge-subtitle {
-            font-size: 13px;
+            font-size: 16px;
             color: var(--text-secondary);
             margin-bottom: 10px;
           }
@@ -1176,8 +1198,8 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
           .followup-nudge-btn {
             flex: 1;
             min-width: 80px;
-            padding: 8px 12px;
-            font-size: 13px;
+            padding: 12px 16px;
+            font-size: 16px;
           }
           .followup-archive-btn {
             color: var(--text-secondary);
@@ -1204,11 +1226,11 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             width: 100%;
             text-align: center;
             margin-top: 16px;
-            padding: 8px;
+            padding: 12px;
             background: none;
             border: none;
             color: var(--text-secondary);
-            font-size: 13px;
+            font-size: 16px;
             cursor: pointer;
           }
           .feedback-btn:hover {
@@ -1221,7 +1243,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             margin-top: 8px;
           }
           .feedback-title {
-            font-size: 13px;
+            font-size: 16px;
             font-weight: 500;
             margin-bottom: 8px;
           }
@@ -1231,12 +1253,12 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             gap: 8px;
           }
           .feedback-option {
-            padding: 10px 12px;
+            padding: 14px 16px;
             background: rgba(255,255,255,0.05);
             border: 1px solid rgba(255,255,255,0.1);
             border-radius: 6px;
             color: var(--text-primary);
-            font-size: 13px;
+            font-size: 16px;
             text-align: left;
             cursor: pointer;
             transition: background 0.2s;
@@ -1263,12 +1285,12 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             padding: 8px 0 4px;
           }
           .picker-grid-btn {
-            padding: 12px;
+            padding: 16px;
             border: 1px solid var(--separator);
             border-radius: 8px;
             background: var(--bg-elevated);
             color: var(--text-primary);
-            font-size: 14px;
+            font-size: 16px;
             font-weight: 500;
             cursor: pointer;
             text-align: center;
@@ -1305,7 +1327,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
           }
           .source-gmail-link {
             color: var(--accent);
-            font-size: 13px;
+            font-size: 16px;
             font-weight: 600;
             text-decoration: none;
           }
@@ -1323,13 +1345,13 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             margin-top: 12px;
           }
           .date-picker-label {
-            font-size: 13px;
+            font-size: 16px;
             color: var(--text-secondary);
             white-space: nowrap;
           }
           .btn-sm {
-            padding: 6px 12px;
-            font-size: 12px;
+            padding: 10px 16px;
+            font-size: 16px;
           }
           .feedback-picker-inline {
             display: flex;
@@ -1341,13 +1363,24 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
             border-radius: 6px;
           }
           .feedback-picker-label {
-            font-size: 13px;
+            font-size: 16px;
             color: var(--text-secondary);
           }
           .feedback-picker-actions {
             display: flex;
             gap: 8px;
             justify-content: flex-end;
+          }
+          .waiting-summary {
+            background: rgba(50, 173, 230, 0.1);
+            border: 1px solid rgba(50, 173, 230, 0.3);
+            border-radius: 8px;
+            padding: 12px 14px;
+            margin-bottom: 12px;
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--color-waiting);
+            text-align: center;
           }
         `}</style>
       </div>

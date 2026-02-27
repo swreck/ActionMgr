@@ -483,9 +483,36 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
     if (leadTimeDays !== undefined) updateData.leadTimeDays = leadTimeDays
     if (recurrenceRule !== undefined) {
       updateData.recurrenceRule = recurrenceRule || null
-      // Auto-set leadTimeDays when recurrence changes (unless user explicitly set it in same request)
       if (leadTimeDays === undefined && recurrenceRule) {
         updateData.leadTimeDays = suggestLeadTimeDays(recurrenceRule)
+      }
+    }
+
+    // Compute final values for auto-logic
+    const finalRule = (recurrenceRule !== undefined ? (recurrenceRule || null) : existing.recurrenceRule) as string | null
+    const finalDueDate = dueDate !== undefined ? (dueDate ? new Date(dueDate) : null) : existing.dueDate
+    const finalLeadDays = leadTimeDays !== undefined ? leadTimeDays
+      : (recurrenceRule !== undefined && recurrenceRule ? suggestLeadTimeDays(recurrenceRule) : existing.leadTimeDays)
+
+    // Auto-add BYMONTHDAY when user changes due date on a recurring action
+    if (finalRule && finalDueDate && dueDate !== undefined) {
+      const freq = finalRule.match(/FREQ=(\w+)/)?.[1]
+      if (freq === 'MONTHLY' || freq === 'YEARLY') {
+        const dayOfMonth = finalDueDate.getUTCDate()
+        let updated = finalRule.replace(/;?BYMONTHDAY=\d+/g, '')
+        updated += `;BYMONTHDAY=${dayOfMonth}`
+        updateData.recurrenceRule = updated
+      }
+    }
+
+    // Auto-route to WAITING when recurrence + future due date
+    const now = new Date()
+    if (finalRule && finalDueDate && finalDueDate > now &&
+        (recurrenceRule !== undefined || dueDate !== undefined)) {
+      const trigDate = new Date(finalDueDate)
+      trigDate.setDate(trigDate.getDate() - finalLeadDays)
+      if (trigDate > now && container === undefined && existing.container !== 'WAITING') {
+        updateData.container = 'WAITING' as Container
       }
     }
 
@@ -494,6 +521,51 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
       data: updateData,
       include: { source: true }
     })
+
+    // Auto-create/update trigger when recurrence + future due date
+    if (action.recurrenceRule && action.dueDate && action.dueDate > now &&
+        (recurrenceRule !== undefined || dueDate !== undefined)) {
+      const trigDate = new Date(action.dueDate)
+      trigDate.setDate(trigDate.getDate() - action.leadTimeDays)
+      const finalTrigDate = trigDate > now ? trigDate : action.dueDate
+
+      const existingDateTrigger = await prisma.trigger.findFirst({
+        where: { actionId: id, type: 'DATE_EXACT', isTriggered: false }
+      })
+
+      if (existingDateTrigger) {
+        if (dueDate !== undefined) {
+          await prisma.trigger.update({
+            where: { id: existingDateTrigger.id },
+            data: {
+              triggerDate: finalTrigDate,
+              description: `Auto-reminder: due ${action.dueDate.toISOString().split('T')[0]}`
+            }
+          })
+        }
+      } else {
+        await prisma.trigger.create({
+          data: {
+            actionId: id,
+            type: 'DATE_EXACT',
+            description: `Auto-reminder: due ${action.dueDate.toISOString().split('T')[0]}`,
+            triggerDate: finalTrigDate
+          }
+        })
+      }
+    }
+
+    // Log container change if auto-routed to WAITING
+    if (updateData.container && updateData.container !== existing.container) {
+      await prisma.actionEvent.create({
+        data: {
+          actionId: action.id,
+          type: 'CONTAINER_CHANGE',
+          fromContainer: existing.container,
+          toContainer: updateData.container as Container
+        }
+      })
+    }
 
     // Log edit event
     await prisma.actionEvent.create({

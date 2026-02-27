@@ -205,12 +205,12 @@ export default function AddTriggerModal({ actionId, onClose, onCreated }: AddTri
             gap: 8px;
           }
           .trigger-type-btn {
-            padding: 10px;
+            padding: 14px;
             background: var(--bg-card);
             border: 2px solid transparent;
             border-radius: 8px;
             color: var(--text-secondary);
-            font-size: 13px;
+            font-size: 16px;
             font-weight: 500;
             cursor: pointer;
             transition: all 0.2s;
@@ -223,7 +223,7 @@ export default function AddTriggerModal({ actionId, onClose, onCreated }: AddTri
             background: rgba(255,255,255,0.05);
           }
           .form-hint {
-            font-size: 12px;
+            font-size: 15px;
             color: var(--text-secondary);
             margin-top: 6px;
           }
