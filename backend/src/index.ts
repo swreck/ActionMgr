@@ -88,4 +88,3 @@ process.on('SIGTERM', async () => {
   await prisma.$disconnect()
   process.exit(0)
 })
-// deploy 1772176224
