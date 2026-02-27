@@ -742,7 +742,6 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                 <button className="btn btn-primary" onClick={async () => {
                   await updateAction(action.id, { needsTuning: false, version: action.version })
                   onUpdate?.()
-                  onClose()
                 }}>
                   Looks Good
                 </button>

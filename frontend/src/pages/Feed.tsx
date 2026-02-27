@@ -308,6 +308,7 @@ export default function Feed({ activeContainer, flagFilter, onDataChange, onOpen
           onClose={() => setSelectedActionId(null)}
           onUpdate={() => {
             loadActions()
+            refreshCounts()
             setSelectedActionId(null)
           }}
         />
