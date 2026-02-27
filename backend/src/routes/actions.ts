@@ -505,14 +505,20 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
       }
     }
 
-    // Auto-route to WAITING when recurrence + future due date
+    // Auto-route to WAITING when due date is far enough out (>21 days) or recurrence + future due date
     const now = new Date()
-    if (finalRule && finalDueDate && finalDueDate > now &&
+    const twentyOneDaysOut = new Date(now)
+    twentyOneDaysOut.setDate(twentyOneDaysOut.getDate() + 21)
+
+    if (finalDueDate && finalDueDate > now &&
         (recurrenceRule !== undefined || dueDate !== undefined)) {
       const trigDate = new Date(finalDueDate)
       trigDate.setDate(trigDate.getDate() - finalLeadDays)
       if (trigDate > now && container === undefined && existing.container !== 'WAITING') {
-        updateData.container = 'WAITING' as Container
+        // Route to WAITING if: has recurrence, OR due date is >21 days out
+        if (finalRule || finalDueDate > twentyOneDaysOut) {
+          updateData.container = 'WAITING' as Container
+        }
       }
     }
 
@@ -522,8 +528,9 @@ router.put('/:id', async (req: Request, res: Response, next: NextFunction) => {
       include: { source: true }
     })
 
-    // Auto-create/update trigger when recurrence + future due date
-    if (action.recurrenceRule && action.dueDate && action.dueDate > now &&
+    // Auto-create/update trigger when future due date (recurring or >21 days out)
+    if (action.dueDate && action.dueDate > now &&
+        (action.recurrenceRule || action.dueDate > twentyOneDaysOut) &&
         (recurrenceRule !== undefined || dueDate !== undefined)) {
       const trigDate = new Date(action.dueDate)
       trigDate.setDate(trigDate.getDate() - action.leadTimeDays)
