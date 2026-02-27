@@ -746,6 +746,14 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                   Looks Good
                 </button>
               )}
+              {action.needsClarification && (
+                <button className="btn btn-primary" onClick={async () => {
+                  await updateAction(action.id, { needsClarification: false, version: action.version })
+                  onUpdate?.()
+                }}>
+                  Looks Good
+                </button>
+              )}
               {action.container === 'CANDIDATES' && (
                 <button className="btn btn-primary" onClick={handleConfirm}>
                   Move to Now
