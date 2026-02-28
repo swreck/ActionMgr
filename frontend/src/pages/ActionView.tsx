@@ -751,7 +751,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                   await updateAction(action.id, { needsClarification: false, version: action.version })
                   onUpdate?.()
                 }}>
-                  Looks Good
+                  Resolved
                 </button>
               )}
               {action.container === 'CANDIDATES' && (
