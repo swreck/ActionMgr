@@ -98,6 +98,12 @@ export async function purgeAction(id: number): Promise<void> {
   })
 }
 
+export async function notAnAction(id: number): Promise<{ success: boolean; learned: string[] }> {
+  return request(`/actions/${id}/not-an-action`, {
+    method: 'POST'
+  })
+}
+
 export async function acknowledgeFollowUp(id: number): Promise<void> {
   await request(`/actions/${id}/acknowledge`, {
     method: 'POST'

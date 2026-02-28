@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Action, Urgency, Container, Trigger, CONTAINER_LABELS, URGENCY_LABELS } from '../types'
-import { getAction, updateAction, completeAction, moveAction, getTriggers, submitTuningFeedback, reparseAction, createTrigger, mergeActions, acknowledgeFollowUp, purgeAction, deleteAction, FeedbackType } from '../api/client'
+import { getAction, updateAction, completeAction, moveAction, getTriggers, submitTuningFeedback, reparseAction, createTrigger, mergeActions, acknowledgeFollowUp, purgeAction, deleteAction, notAnAction, FeedbackType } from '../api/client'
 import InfoPanel from '../components/InfoPanel'
 import TriggerCard from '../components/TriggerCard'
 import AddTriggerModal from '../components/AddTriggerModal'
@@ -757,6 +757,15 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
               {action.container === 'CANDIDATES' && (
                 <button className="btn btn-primary" onClick={handleConfirm}>
                   Move to Now
+                </button>
+              )}
+              {(action.container === 'CANDIDATES' || action.needsClarification || action.needsTuning) && (
+                <button className="btn btn-danger" onClick={async () => {
+                  if (!confirm('Delete this item and teach the system to avoid similar ones?')) return
+                  await notAnAction(action.id)
+                  onUpdate?.()
+                }}>
+                  Not an Action
                 </button>
               )}
               <button className="btn btn-secondary" onClick={() => setEditing(true)}>

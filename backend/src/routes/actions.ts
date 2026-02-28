@@ -601,6 +601,63 @@ router.delete('/:id/purge', async (req: Request, res: Response, next: NextFuncti
   }
 })
 
+// POST /api/actions/:id/not-an-action - Delete + learn from false positive
+router.post('/:id/not-an-action', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = parseInt(req.params.id as string)
+    const action = await prisma.action.findUnique({
+      where: { id },
+      include: { source: true }
+    })
+    if (!action) {
+      return res.status(404).json({ message: 'Action not found' })
+    }
+
+    const learned: string[] = []
+
+    // If Gmail source, block the sender domain for future scans
+    if (action.source?.emailFrom) {
+      const domainMatch = action.source.emailFrom.match(/@([^\s>]+)/)
+      if (domainMatch) {
+        const domain = domainMatch[1].toLowerCase()
+        const existing = await prisma.systemSetting.findUnique({ where: { key: 'blockedSenders' } })
+        const blocked: string[] = existing ? JSON.parse(existing.value) : []
+        if (!blocked.includes(domain)) {
+          blocked.push(domain)
+          await prisma.systemSetting.upsert({
+            where: { key: 'blockedSenders' },
+            update: { value: JSON.stringify(blocked) },
+            create: { key: 'blockedSenders', value: JSON.stringify(blocked) }
+          })
+          learned.push(`Blocked sender domain: ${domain}`)
+        }
+      }
+    }
+
+    // Create an ACTIVE tuning rule as secondary defense for the parser
+    const senderInfo = action.source?.emailFrom ? ` from ${action.source.emailFrom}` : ''
+    await prisma.tuningRule.create({
+      data: {
+        description: `Not an action: "${action.description}"`,
+        category: 'FALSE_POSITIVE',
+        condition: `Email${senderInfo} with subject pattern similar to: ${action.source?.emailSubject || action.rawInput?.substring(0, 80) || action.description}`,
+        transformation: 'Do not create an action. Score commitment_confidence at 0.1 or lower.',
+        status: 'ACTIVE',
+        userFeedback: 'User explicitly marked as not an action'
+      }
+    })
+    learned.push('Created tuning rule')
+
+    // Delete the action
+    await prisma.action.delete({ where: { id } })
+    learned.push('Deleted action')
+
+    res.json({ success: true, learned })
+  } catch (err) {
+    next(err)
+  }
+})
+
 // DELETE /api/actions/:id - Archive action (soft delete)
 router.delete('/:id', async (req: Request, res: Response, next: NextFunction) => {
   try {

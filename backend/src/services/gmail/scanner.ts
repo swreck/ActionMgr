@@ -270,6 +270,26 @@ async function processEmail(email: EmailContent): Promise<ParsedAction | null> {
   // Combine subject and body for parsing
   const textToAnalyze = `From: ${email.from}\nSubject: ${email.subject}\n\n${email.body}`
 
+  // Check blocked senders (user-taught via "Not an Action")
+  const blockedSetting = await prisma.systemSetting.findUnique({ where: { key: 'blockedSenders' } })
+  if (blockedSetting) {
+    const blockedDomains: string[] = JSON.parse(blockedSetting.value)
+    const lowerFrom = email.from.toLowerCase()
+    if (blockedDomains.some(domain => lowerFrom.includes(domain))) {
+      await prisma.source.create({
+        data: {
+          type: 'GMAIL',
+          emailId: email.id,
+          emailFrom: email.from,
+          emailSubject: email.subject,
+          emailDate: email.date
+        }
+      })
+      console.log(`Skipping blocked sender: ${email.from}`)
+      return null
+    }
+  }
+
   // Check if this looks like an action-worthy email
   if (isLikelyNotActionable(email)) {
     // Still record that we processed it to avoid re-processing

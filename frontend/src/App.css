@@ -558,6 +558,11 @@ body {
   color: white;
 }
 
+.btn-danger {
+  background-color: var(--urgency-critical);
+  color: white;
+}
+
 .btn-block {
   width: 100%;
 }
