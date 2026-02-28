@@ -98,7 +98,7 @@ section('Goal Detection — manual trigger')
 
 {
   // Clear the lastGoalDetectionAt so it doesn't skip
-  await PUT('/settings', { lastGoalDetectionAt: new Date(0).toISOString() })
+  await PUT('/system/settings', { lastGoalDetectionAt: new Date(0).toISOString() })
 
   const r = await POST('/system/run-goal-detection')
   assert('POST /system/run-goal-detection returns 200', r.status === 200)
@@ -243,7 +243,7 @@ section('Goal Detection — dismissed combos filtered')
 
 {
   // Reset cooldown and run again
-  await PUT('/settings', { lastGoalDetectionAt: new Date(0).toISOString() })
+  await PUT('/system/settings', { lastGoalDetectionAt: new Date(0).toISOString() })
 
   const r = await POST('/system/run-goal-detection')
   assert('Third run returns 200', r.status === 200)
