@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../index'
-import { triggerFollowUpCheck, triggerTriggerCheck } from '../jobs/scheduler'
+import { triggerFollowUpCheck, triggerTriggerCheck, triggerGoalDetection } from '../jobs/scheduler'
 
 const router = Router()
 
@@ -125,6 +125,16 @@ router.post('/run-followups', async (_req: Request, res: Response, next: NextFun
 router.post('/run-triggers', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const result = await triggerTriggerCheck()
+    res.json(result)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// POST /api/system/run-goal-detection - Manually run AI goal relationship detection
+router.post('/run-goal-detection', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const result = await triggerGoalDetection()
     res.json(result)
   } catch (err) {
     next(err)

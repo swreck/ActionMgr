@@ -8,6 +8,8 @@ import {
   addActionsToGroup,
   removeActionFromGroup,
   archiveGroup,
+  acceptGoalSuggestion,
+  dismissGoalSuggestion,
   ActionGroup,
   GroupSuggestion
 } from '../api/client'
@@ -26,7 +28,8 @@ export default function Groups({ onClose, onSelectAction }: GroupsProps) {
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newGroupName, setNewGroupName] = useState('')
   const [newGroupDescription, setNewGroupDescription] = useState('')
-  const [suggestionsExpanded, setSuggestionsExpanded] = useState(false)
+  const [editingSuggestionId, setEditingSuggestionId] = useState<number | null>(null)
+  const [editingSuggestionName, setEditingSuggestionName] = useState('')
   const [addActionsGroupId, setAddActionsGroupId] = useState<number | null>(null)
   const [addActionsSearch, setAddActionsSearch] = useState('')
   const [allActions, setAllActions] = useState<Action[]>([])
@@ -72,16 +75,27 @@ export default function Groups({ onClose, onSelectAction }: GroupsProps) {
     }
   }
 
-  async function handleAcceptSuggestion(suggestion: GroupSuggestion) {
+  function handleStartAccept(suggestion: GroupSuggestion) {
+    setEditingSuggestionId(suggestion.id)
+    setEditingSuggestionName(suggestion.suggestedName)
+  }
+
+  async function handleConfirmAccept(suggestionId: number) {
     try {
-      await createGroup({
-        name: suggestion.suggestedName,
-        description: suggestion.reason,
-        actionIds: suggestion.actionIds
-      })
+      await acceptGoalSuggestion(suggestionId, editingSuggestionName.trim() || undefined)
+      setEditingSuggestionId(null)
       loadData()
     } catch (err) {
-      console.error('Failed to create group from suggestion:', err)
+      console.error('Failed to accept suggestion:', err)
+    }
+  }
+
+  async function handleDismissSuggestion(suggestionId: number) {
+    try {
+      await dismissGoalSuggestion(suggestionId)
+      setSuggestions(prev => prev.filter(s => s.id !== suggestionId))
+    } catch (err) {
+      console.error('Failed to dismiss suggestion:', err)
     }
   }
 
@@ -311,42 +325,72 @@ export default function Groups({ onClose, onSelectAction }: GroupsProps) {
               </section>
 
               {suggestions.length > 0 && (
-                <section className="groups-section suggestions-section">
-                  <button
-                    className="suggestions-toggle"
-                    onClick={() => setSuggestionsExpanded(!suggestionsExpanded)}
-                  >
-                    <h3 className="section-title" style={{ margin: 0 }}>
-                      Suggested Groups ({suggestions.length})
-                    </h3>
-                    <span className="toggle-arrow">
-                      {suggestionsExpanded ? '\u25B2' : '\u25BC'}
-                    </span>
-                  </button>
-                  {suggestionsExpanded && (
-                    <>
-                      <p className="section-subtitle">
-                        Based on similar keywords in your ungrouped actions
-                      </p>
-                      {suggestions.map((suggestion, idx) => (
-                        <div key={idx} className="suggestion-card">
-                          <div className="suggestion-content">
-                            <div className="suggestion-name">{suggestion.suggestedName}</div>
-                            <div className="suggestion-reason">{suggestion.reason}</div>
-                            <div className="suggestion-count">
-                              {suggestion.actionIds.length} actions
+                <section className="groups-section">
+                  <h3 className="section-title">Suggested Groups</h3>
+                  <p className="section-subtitle">
+                    AI-detected actions that may be steps toward the same goal
+                  </p>
+                  {suggestions.map(suggestion => (
+                    <div key={suggestion.id} className="suggestion-card goal-suggestion">
+                      <div className="suggestion-content">
+                        {editingSuggestionId === suggestion.id ? (
+                          <div className="suggestion-edit-name">
+                            <input
+                              type="text"
+                              className="form-input suggestion-name-input"
+                              value={editingSuggestionName}
+                              onChange={e => setEditingSuggestionName(e.target.value)}
+                              autoFocus
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleConfirmAccept(suggestion.id)
+                                if (e.key === 'Escape') setEditingSuggestionId(null)
+                              }}
+                            />
+                            <div className="suggestion-edit-actions">
+                              <button
+                                className="btn btn-primary btn-small"
+                                onClick={() => handleConfirmAccept(suggestion.id)}
+                              >
+                                Create
+                              </button>
+                              <button
+                                className="btn btn-secondary btn-small"
+                                onClick={() => setEditingSuggestionId(null)}
+                              >
+                                Cancel
+                              </button>
                             </div>
                           </div>
+                        ) : (
+                          <div className="suggestion-name">{suggestion.suggestedName}</div>
+                        )}
+                        <div className="suggestion-reason">{suggestion.reasoning}</div>
+                        <div className="suggestion-actions-list">
+                          {suggestion.actions.map(action => (
+                            <div key={action.id} className="suggestion-action-item">
+                              {action.shortDescription || action.description}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      {editingSuggestionId !== suggestion.id && (
+                        <div className="suggestion-buttons">
                           <button
                             className="btn btn-secondary btn-small"
-                            onClick={() => handleAcceptSuggestion(suggestion)}
+                            onClick={() => handleStartAccept(suggestion)}
                           >
-                            Create
+                            Group
+                          </button>
+                          <button
+                            className="btn-link btn-small"
+                            onClick={() => handleDismissSuggestion(suggestion.id)}
+                          >
+                            Dismiss
                           </button>
                         </div>
-                      ))}
-                    </>
-                  )}
+                      )}
+                    </div>
+                  ))}
                 </section>
               )}
             </>
@@ -577,6 +621,44 @@ export default function Groups({ onClose, onSelectAction }: GroupsProps) {
           color: var(--text-secondary);
           margin-top: 4px;
         }
+        .goal-suggestion {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .goal-suggestion .suggestion-content {
+          flex: 1;
+        }
+        .suggestion-actions-list {
+          margin-top: 8px;
+          padding-left: 8px;
+          border-left: 2px solid rgba(255,255,255,0.1);
+        }
+        .suggestion-action-item {
+          font-size: 13px;
+          color: var(--text-primary);
+          padding: 3px 0;
+        }
+        .suggestion-buttons {
+          display: flex;
+          gap: 12px;
+          align-items: center;
+          margin-top: 10px;
+        }
+        .suggestion-edit-name {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          margin-bottom: 4px;
+        }
+        .suggestion-name-input {
+          font-size: 15px;
+          font-weight: 600;
+          padding: 6px 8px;
+        }
+        .suggestion-edit-actions {
+          display: flex;
+          gap: 8px;
+        }
         .group-card {
           background: var(--bg-card);
           border-radius: 12px;
@@ -732,24 +814,6 @@ export default function Groups({ onClose, onSelectAction }: GroupsProps) {
           margin-bottom: 12px;
           font-size: 13px;
           color: #22c55e;
-        }
-        .suggestions-toggle {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          width: 100%;
-          background: none;
-          border: none;
-          color: inherit;
-          cursor: pointer;
-          padding: 8px 0;
-        }
-        .toggle-arrow {
-          font-size: 12px;
-          color: var(--text-secondary);
-        }
-        .suggestions-section .section-subtitle {
-          margin-top: 4px;
         }
         .add-actions-modal {
           max-height: 80vh;

@@ -7,7 +7,7 @@ import Groups from './pages/Groups'
 import Tuning from './pages/Tuning'
 import ActionView from './pages/ActionView'
 import { Container } from './types'
-import { getSystemHealth, SystemHealth } from './api/client'
+import { getSystemHealth, SystemHealth, getContainerCounts } from './api/client'
 
 function App() {
   const [activeContainer, setActiveContainer] = useState<Container | null>('ACTIONABLE_NOW')
@@ -19,10 +19,12 @@ function App() {
   const [selectedActionId, setSelectedActionId] = useState<number | null>(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const [health, setHealth] = useState<SystemHealth | null>(null)
+  const [goalSuggestionCount, setGoalSuggestionCount] = useState(0)
 
   useEffect(() => {
     checkHealth()
-    const interval = setInterval(checkHealth, 5 * 60 * 1000)
+    loadGoalCount()
+    const interval = setInterval(() => { checkHealth(); loadGoalCount() }, 5 * 60 * 1000)
     return () => clearInterval(interval)
   }, [])
 
@@ -35,11 +37,21 @@ function App() {
     }
   }
 
+  async function loadGoalCount() {
+    try {
+      const counts = await getContainerCounts()
+      setGoalSuggestionCount(counts.goalSuggestions || 0)
+    } catch {
+      // silent fail
+    }
+  }
+
   const hasErrors = health && health.errors.length > 0
 
   function handleRefresh() {
     setRefreshKey(k => k + 1)
     refreshCounts()
+    loadGoalCount()
   }
 
   function handleSearchSelect(actionId: number) {
@@ -75,7 +87,7 @@ function App() {
           </svg>
         </button>
         <button
-          className="search-btn"
+          className="search-btn groups-btn"
           onClick={() => setShowGroups(true)}
           title="Groups"
         >
@@ -85,6 +97,9 @@ function App() {
             <rect x="3" y="14" width="7" height="7" rx="1"/>
             <rect x="14" y="14" width="7" height="7" rx="1"/>
           </svg>
+          {goalSuggestionCount > 0 && (
+            <span className="groups-badge">{goalSuggestionCount}</span>
+          )}
         </button>
         <button
           className={`settings-btn ${hasErrors ? 'has-errors' : ''}`}

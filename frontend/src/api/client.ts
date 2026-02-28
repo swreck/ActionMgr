@@ -444,14 +444,38 @@ export async function removeActionFromGroup(
   })
 }
 
+export interface GoalSuggestionAction {
+  id: number
+  description: string
+  shortDescription: string | null
+}
+
 export interface GroupSuggestion {
-  reason: string
-  actionIds: number[]
+  id: number
   suggestedName: string
+  reasoning: string
+  actions: GoalSuggestionAction[]
 }
 
 export async function getGroupSuggestions(): Promise<{ suggestions: GroupSuggestion[] }> {
   return request<{ suggestions: GroupSuggestion[] }>('/groups/suggestions')
+}
+
+export async function acceptGoalSuggestion(id: number, name?: string): Promise<unknown> {
+  return request('/groups/suggestions/' + id + '/accept', {
+    method: 'POST',
+    body: JSON.stringify({ name })
+  })
+}
+
+export async function dismissGoalSuggestion(id: number): Promise<void> {
+  await request('/groups/suggestions/' + id + '/dismiss', {
+    method: 'POST'
+  })
+}
+
+export async function runGoalDetection(): Promise<{ success: boolean; message: string; suggestionsCreated?: number }> {
+  return request('/system/run-goal-detection', { method: 'POST' })
 }
 
 export async function mergeActions(

@@ -50,70 +50,114 @@ router.get('/', async (_req: Request, res: Response, next: NextFunction) => {
   }
 })
 
-// GET /api/groups/suggestions - Suggest groupings based on similarity
+// GET /api/groups/suggestions - Get pending AI-generated goal suggestions
 // NOTE: Must be defined before /:id to avoid Express treating "suggestions" as an id
 router.get('/suggestions', async (_req: Request, res: Response, next: NextFunction) => {
   try {
-    // Get ungrouped actions
-    const actions = await prisma.action.findMany({
-      where: {
-        groupId: null,
-        archivedAt: null
+    const suggestions = await prisma.goalSuggestion.findMany({
+      where: { status: 'pending' },
+      include: {
+        actions: {
+          include: {
+            action: {
+              select: {
+                id: true,
+                description: true,
+                shortDescription: true
+              }
+            }
+          }
+        }
       },
-      select: {
-        id: true,
-        description: true,
-        rawInput: true
-      }
+      orderBy: { createdAt: 'desc' }
     })
 
-    // Simple keyword-based grouping suggestions
-    const suggestions: Array<{
-      reason: string
-      actionIds: number[]
-      suggestedName: string
-    }> = []
+    res.json({
+      suggestions: suggestions.map(s => ({
+        id: s.id,
+        suggestedName: s.suggestedName,
+        reasoning: s.reasoning,
+        actions: s.actions.map(sa => sa.action)
+      }))
+    })
+  } catch (err) {
+    next(err)
+  }
+})
 
-    // Group by common keywords
-    const keywordGroups: Record<string, number[]> = {}
+// POST /api/groups/suggestions/:id/accept - Accept a goal suggestion and create a group
+router.post('/suggestions/:id/accept', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = parseInt(req.params.id as string)
+    const { name } = req.body || {}
 
-    for (const action of actions) {
-      const words = action.description.toLowerCase().split(/\s+/)
-      for (const word of words) {
-        // Skip common words
-        if (word.length < 4 || ['with', 'the', 'and', 'for', 'from', 'this', 'that', 'about'].includes(word)) {
-          continue
-        }
+    const suggestion = await prisma.goalSuggestion.findUnique({
+      where: { id },
+      include: { actions: true }
+    })
 
-        if (!keywordGroups[word]) {
-          keywordGroups[word] = []
-        }
-        if (!keywordGroups[word].includes(action.id)) {
-          keywordGroups[word].push(action.id)
-        }
-      }
+    if (!suggestion) {
+      return res.status(404).json({ message: 'Suggestion not found' })
     }
 
-    // Find keywords that appear in multiple actions
-    for (const [keyword, ids] of Object.entries(keywordGroups)) {
-      if (ids.length >= 2 && ids.length <= 5) {
-        // Check if this group isn't a subset of an existing suggestion
-        const isSubset = suggestions.some(s =>
-          ids.every(id => s.actionIds.includes(id))
-        )
-
-        if (!isSubset) {
-          suggestions.push({
-            reason: `Related to "${keyword}"`,
-            actionIds: ids,
-            suggestedName: keyword.charAt(0).toUpperCase() + keyword.slice(1)
-          })
-        }
-      }
+    if (suggestion.status !== 'pending') {
+      return res.status(400).json({ message: 'Suggestion already resolved' })
     }
 
-    // Limit to top 5 suggestions
-    res.json({ suggestions: suggestions.slice(0, 5) })
+    const actionIds = suggestion.actions.map(sa => sa.actionId)
+    const groupName = name?.trim() || suggestion.suggestedName
+
+    // Create the group
+    const group = await prisma.actionGroup.create({
+      data: { name: groupName, description: suggestion.reasoning }
+    })
+
+    // Add actions to group
+    if (actionIds.length > 0) {
+      await prisma.action.updateMany({
+        where: { id: { in: actionIds } },
+        data: { groupId: group.id }
+      })
+    }
+
+    // Mark suggestion as accepted
+    await prisma.goalSuggestion.update({
+      where: { id },
+      data: { status: 'accepted', resolvedAt: new Date() }
+    })
+
+    const fullGroup = await prisma.actionGroup.findUnique({
+      where: { id: group.id },
+      include: { actions: true }
+    })
+
+    res.status(201).json(fullGroup)
+  } catch (err) {
+    next(err)
+  }
+})
+
+// POST /api/groups/suggestions/:id/dismiss - Dismiss a goal suggestion
+router.post('/suggestions/:id/dismiss', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const id = parseInt(req.params.id as string)
+
+    const suggestion = await prisma.goalSuggestion.findUnique({ where: { id } })
+
+    if (!suggestion) {
+      return res.status(404).json({ message: 'Suggestion not found' })
+    }
+
+    if (suggestion.status !== 'pending') {
+      return res.status(400).json({ message: 'Suggestion already resolved' })
+    }
+
+    await prisma.goalSuggestion.update({
+      where: { id },
+      data: { status: 'dismissed', resolvedAt: new Date() }
+    })
+
+    res.json({ success: true })
   } catch (err) {
     next(err)
   }

@@ -118,6 +118,26 @@ body {
   border-radius: 50%;
 }
 
+.groups-btn {
+  position: relative;
+}
+
+.groups-badge {
+  position: absolute;
+  top: 6px;
+  right: 4px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 8px;
+  padding: 0 4px;
+}
+
 /* ─── Error banner ────────────────────────────────────────────────────── */
 .error-banner {
   background: var(--urgency-critical);

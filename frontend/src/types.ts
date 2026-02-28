@@ -78,6 +78,7 @@ export interface ContainerCounts {
   AMBIGUITY: number
   WAITING: number
   TUNING: number // deprecated — kept for backward compat; always 0
+  goalSuggestions?: number
 }
 
 export interface FlagCounts {

@@ -4,6 +4,7 @@ import { scanGmail } from '../services/gmail/scanner'
 import { isGmailConnected } from '../services/gmail/auth'
 import { checkWebCondition } from '../services/ai/web-checker'
 import { sendPushNotification } from '../services/notifications'
+import { runGoalDetection } from '../services/ai/goal-detector'
 
 /**
  * Initialize all scheduled jobs
@@ -31,12 +32,14 @@ export function initializeScheduler(): void {
     await checkWaitingSafety()
     console.log('Running missed recurrence trigger check...')
     await checkMissedRecurrenceTriggers()
+    console.log('Running goal relationship detection...')
+    await runGoalDetection()
   })
 
   console.log('Scheduler initialized with jobs:')
   console.log('  - Gmail scan: every 4 hours')
   console.log('  - Trigger check: every hour')
-  console.log('  - Follow-up check + WAITING safety net + missed recurrence: 9 AM daily')
+  console.log('  - Follow-up check + WAITING safety net + missed recurrence + goal detection: 9 AM daily')
 }
 
 /**
@@ -481,5 +484,17 @@ export async function triggerTriggerCheck(): Promise<{ success: boolean; message
     return { success: true, message: 'Trigger check completed' }
   } catch (err) {
     return { success: false, message: err instanceof Error ? err.message : 'Trigger check failed' }
+  }
+}
+
+/**
+ * Manually run goal relationship detection (for testing / on-demand use)
+ */
+export async function triggerGoalDetection(): Promise<{ success: boolean; message: string; suggestionsCreated?: number }> {
+  try {
+    const result = await runGoalDetection()
+    return { success: true, message: `Goal detection completed: ${result.suggestionsCreated} suggestions created`, suggestionsCreated: result.suggestionsCreated }
+  } catch (err) {
+    return { success: false, message: err instanceof Error ? err.message : 'Goal detection failed' }
   }
 }

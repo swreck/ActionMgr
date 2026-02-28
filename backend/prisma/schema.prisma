@@ -55,6 +55,7 @@ model Action {
   // Grouping
   groupId         Int?
   group           ActionGroup?    @relation(fields: [groupId], references: [id])
+  goalSuggestions GoalSuggestionAction[]
 
   @@index([container])
   @@index([urgency])
@@ -271,6 +272,31 @@ model PushSubscription {
   createdAt DateTime @default(now())
 
   @@map("push_subscriptions")
+}
+
+// Goal relationship suggestions (AI-detected)
+model GoalSuggestion {
+  id            Int       @id @default(autoincrement())
+  suggestedName String
+  reasoning     String
+  status        String    @default("pending")  // pending | accepted | dismissed
+  createdAt     DateTime  @default(now())
+  resolvedAt    DateTime?
+
+  actions       GoalSuggestionAction[]
+
+  @@map("goal_suggestions")
+}
+
+model GoalSuggestionAction {
+  id              Int             @id @default(autoincrement())
+  suggestionId    Int
+  suggestion      GoalSuggestion  @relation(fields: [suggestionId], references: [id], onDelete: Cascade)
+  actionId        Int
+  action          Action          @relation(fields: [actionId], references: [id], onDelete: Cascade)
+
+  @@unique([suggestionId, actionId])
+  @@map("goal_suggestion_actions")
 }
 
 // Gmail OAuth tokens
