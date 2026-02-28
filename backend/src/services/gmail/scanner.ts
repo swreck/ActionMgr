@@ -657,6 +657,12 @@ function isLikelyNotActionable(email: EmailContent): boolean {
     return true
   }
 
+  // Skip marketing subdomains (e.g., user@email.brand.com, user@mail.brand.com)
+  const marketingSubdomains = /^.+@(email|mail|e-mail|send|campaign|promo|offers|deals)\..+/i
+  if (marketingSubdomains.test(lowerFrom)) {
+    return true
+  }
+
   // Skip common automated sender prefixes
   const automatedSenderPrefixes = [
     'notifications@',

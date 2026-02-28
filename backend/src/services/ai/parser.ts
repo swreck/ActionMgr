@@ -149,7 +149,8 @@ Guidelines:
    - Only fall back to MANUAL_CHECK if no other trigger type fits
 7. Confidence scoring — you must return TWO separate confidence scores:
    - commitment_confidence (0-1): How likely is this text a real actionable commitment the user personally needs to act on?
-     Examples: Newsletter/marketing email = 0.1, unsolicited donation request = 0.15, community broadcast = 0.1, vague "maybe I should..." = 0.3, someone asking user to do something = 0.7, user explicitly saying "I need to..." = 0.9, invoice with due date = 0.95.
+     Examples: Newsletter/marketing email = 0.1, unsolicited donation request = 0.15, community broadcast = 0.1, promotional scarcity ("X remaining", "limited availability", "act now") = 0.1, vague "maybe I should..." = 0.3, someone asking user to do something = 0.7, user explicitly saying "I need to..." = 0.9, invoice with due date = 0.95.
+     IMPORTANT: Promotional emails that use urgency or scarcity language ("limited spots", "only X left", "while supplies last", "available now") are MARKETING, not personal commitments. Score them 0.1 regardless of how urgent they sound.
    - parse_confidence (0-1): Given it IS a real commitment, how confident are you in the specific parsed fields (description, urgency, dueDate, parties)?
      High (0.9+) when all details are explicitly stated. Lower when you had to infer dates, guess urgency, or assume who's involved.
 8. List what information is missing if the action itself is unclear or ambiguous. Only include things that make it impossible to know WHAT to do or WHEN — like "which project?" or "what date?". Do NOT include contact details (phone number, email address) as missing info — the user has their own contacts and would not include that in a task description. Do NOT include minor details that don't affect whether the action can be understood and acted on.
