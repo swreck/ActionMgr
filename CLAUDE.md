@@ -24,6 +24,22 @@ Frontend proxies `/api/*` to the backend via Vite config.
 
 Railway CLI is installed and linked to the "exciting-solace" project. Use `railway logs`, `railway status`, etc. directly — don't ask the user to check the dashboard or copy logs.
 
+**Live URL**: `action-manager-backend-production.up.railway.app`
+
+**Critical deployment details:**
+- Railway service name: `action-manager-backend`, root directory: `backend/`
+- Build uses `backend/railway.toml` — only builds the backend (`npm install && npx prisma generate && npx tsc`)
+- Frontend is NOT built during Railway deploy. Frontend must be pre-built locally and committed to `backend/public/`.
+- **To deploy frontend changes**: `cd frontend && npm run build && cp -r dist/* ../backend/public/` then commit `backend/public/` and push.
+- Watch pattern is `/backend/**` — only changes inside `backend/` trigger deploys. Pushing frontend-only changes won't trigger a rebuild unless `backend/public/` is also updated.
+- `railway up` from the project root may be SKIPPED by the watch pattern. Git push is the reliable deploy trigger.
+- A Vercel frontend (`frontend-nu-eight-88.vercel.app`) exists but is NOT the primary URL. The user's data is on Railway. Do not direct the user to the Vercel URL.
+
+**Icons**: SVG + PNGs must exist in BOTH `frontend/public/` (local dev) AND `backend/public/` (production).
+- favicon: `/favicon.svg`
+- apple-touch-icon: `/apple-touch-icon.png` (180px)
+- PWA manifest icons: `/pwa-192x192.png`, `/pwa-512x512.png` (referenced by vite-plugin-pwa's manifest.webmanifest)
+
 ## Key commands
 
 ```bash
