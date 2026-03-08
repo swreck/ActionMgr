@@ -17,7 +17,7 @@ import { initializeScheduler } from './jobs/scheduler'
 import { initPushNotifications } from './services/notifications'
 
 const app = express()
-const port = process.env.PORT || 3001 // v2: icons
+const port = process.env.PORT || 3001
 
 export const prisma = new PrismaClient()
 
@@ -41,21 +41,6 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' })
 })
 
-// Debug: list public directory contents
-import fs from 'fs'
-app.get('/debug-public', (_req, res) => {
-  const publicDir = path.join(__dirname, '../public')
-  try {
-    const files = fs.readdirSync(publicDir)
-    const details = files.map(f => {
-      const stat = fs.statSync(path.join(publicDir, f))
-      return { name: f, size: stat.size, modified: stat.mtime }
-    })
-    res.json({ dir: publicDir, files: details })
-  } catch (e: any) {
-    res.json({ error: e.message, dir: publicDir })
-  }
-})
 
 // Serve frontend static files in production
 app.use(express.static(path.join(__dirname, '../public')))
