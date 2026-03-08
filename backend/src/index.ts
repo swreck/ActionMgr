@@ -17,7 +17,7 @@ import { initializeScheduler } from './jobs/scheduler'
 import { initPushNotifications } from './services/notifications'
 
 const app = express()
-const port = process.env.PORT || 3001
+const port = process.env.PORT || 3001 // v2: icons
 
 export const prisma = new PrismaClient()
 
