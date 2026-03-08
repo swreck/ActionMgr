@@ -1,4 +1,315 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <rect width="100" height="100" rx="20" fill="#1a1a2e"/>
-  <path d="M25 50 L45 70 L75 35" stroke="#e94560" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#1e1e40"/>
+      <stop offset="50%" stop-color="#151530"/>
+      <stop offset="100%" stop-color="#0c0c1e"/>
+    </linearGradient>
+    <radialGradient id="skyGlow" cx="0.4" cy="0.35" r="0.6">
+      <stop offset="0%" stop-color="#2a2a55" stop-opacity="0.5"/>
+      <stop offset="100%" stop-color="#0c0c1e" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Warm attraction field around the checkmark -->
+    <radialGradient id="checkField" cx="0.45" cy="0.55" r="0.4">
+      <stop offset="0%" stop-color="#e94560" stop-opacity="0.08"/>
+      <stop offset="50%" stop-color="#e94560" stop-opacity="0.03"/>
+      <stop offset="100%" stop-color="#e94560" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="noise">
+      <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="3" result="n"/>
+      <feColorMatrix type="saturate" values="0" in="n" result="gray"/>
+      <feBlend in="SourceGraphic" in2="gray" mode="overlay"/>
+    </filter>
+    <filter id="starGlow">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+    <filter id="brightStarGlow">
+      <feGaussianBlur stdDeviation="4"/>
+    </filter>
+    <filter id="wideGlow">
+      <feGaussianBlur stdDeviation="6"/>
+    </filter>
+    <filter id="checkGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="glow"/>
+      <feMerge><feMergeNode in="glow"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="outerGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+    <linearGradient id="checkGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ff6b7a"/>
+      <stop offset="50%" stop-color="#e94560"/>
+      <stop offset="100%" stop-color="#c22040"/>
+    </linearGradient>
+    <linearGradient id="checkShine" x1="0" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#ff8a95" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#e94560" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <clipPath id="iconClip"><rect width="512" height="512" rx="112"/></clipPath>
+
+  <g clip-path="url(#iconClip)">
+    <!-- Night sky background -->
+    <rect width="512" height="512" fill="url(#bg)"/>
+    <rect width="512" height="512" fill="url(#skyGlow)"/>
+    <rect width="512" height="512" fill="url(#bg)" opacity="0.04" filter="url(#noise)"/>
+    <!-- Warm field around checkmark area — the gravity well -->
+    <rect width="512" height="512" fill="url(#checkField)"/>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- NOISE STARS — scattered life, the chaos          -->
+    <!-- Cool blue/white, clearly visible, no pattern     -->
+    <!-- ═══════════════════════════════════════════════ -->
+
+    <!-- Tiny pinpoints — the background hum -->
+    <circle cx="42" cy="38" r="1.8" fill="#bbbbdd" opacity="0.7"/>
+    <circle cx="128" cy="22" r="1.3" fill="#aaaacc" opacity="0.6"/>
+    <circle cx="215" cy="45" r="1.8" fill="#ccccee" opacity="0.65"/>
+    <circle cx="338" cy="30" r="1.3" fill="#bbbbdd" opacity="0.55"/>
+    <circle cx="458" cy="42" r="1.8" fill="#aaaacc" opacity="0.6"/>
+    <circle cx="488" cy="128" r="1.3" fill="#bbbbdd" opacity="0.6"/>
+    <circle cx="22" cy="155" r="1.8" fill="#ccccee" opacity="0.55"/>
+    <circle cx="478" cy="225" r="1.3" fill="#aaaacc" opacity="0.6"/>
+    <circle cx="30" cy="310" r="1.8" fill="#bbbbdd" opacity="0.55"/>
+    <circle cx="485" cy="340" r="1.3" fill="#ccccee" opacity="0.5"/>
+    <circle cx="18" cy="440" r="1.8" fill="#aaaacc" opacity="0.55"/>
+    <circle cx="138" cy="478" r="1.3" fill="#bbbbdd" opacity="0.55"/>
+    <circle cx="285" cy="490" r="1.8" fill="#ccccee" opacity="0.5"/>
+    <circle cx="410" cy="472" r="1.3" fill="#aaaacc" opacity="0.55"/>
+    <circle cx="480" cy="440" r="1.8" fill="#bbbbdd" opacity="0.5"/>
+    <circle cx="72" cy="92" r="1.3" fill="#ccccee" opacity="0.6"/>
+    <circle cx="445" cy="95" r="1.8" fill="#bbbbdd" opacity="0.6"/>
+    <circle cx="260" cy="15" r="1.3" fill="#aaaacc" opacity="0.55"/>
+    <circle cx="500" cy="60" r="1.3" fill="#bbbbdd" opacity="0.45"/>
+    <circle cx="8" cy="260" r="1.5" fill="#aaaacc" opacity="0.5"/>
+    <circle cx="495" cy="470" r="1.3" fill="#ccccee" opacity="0.4"/>
+    <circle cx="60" cy="490" r="1.5" fill="#bbbbdd" opacity="0.45"/>
+
+    <!-- Medium noise stars with glow halos -->
+    <g filter="url(#starGlow)">
+      <circle cx="88" cy="75" r="3.5" fill="#9999cc" opacity="0.6"/>
+    </g>
+    <circle cx="88" cy="75" r="2.2" fill="#bbbbee" opacity="0.8"/>
+
+    <g filter="url(#starGlow)">
+      <circle cx="430" cy="68" r="3.5" fill="#9999cc" opacity="0.55"/>
+    </g>
+    <circle cx="430" cy="68" r="2.2" fill="#bbbbee" opacity="0.75"/>
+
+    <g filter="url(#starGlow)">
+      <circle cx="48" cy="215" r="3.5" fill="#9999cc" opacity="0.55"/>
+    </g>
+    <circle cx="48" cy="215" r="2.2" fill="#bbbbee" opacity="0.7"/>
+
+    <g filter="url(#starGlow)">
+      <circle cx="468" cy="180" r="3" fill="#9999cc" opacity="0.5"/>
+    </g>
+    <circle cx="468" cy="180" r="2" fill="#bbbbee" opacity="0.7"/>
+
+    <g filter="url(#starGlow)">
+      <circle cx="475" cy="310" r="3.5" fill="#9999cc" opacity="0.5"/>
+    </g>
+    <circle cx="475" cy="310" r="2.2" fill="#bbbbee" opacity="0.7"/>
+
+    <g filter="url(#starGlow)">
+      <circle cx="38" cy="390" r="3" fill="#9999cc" opacity="0.5"/>
+    </g>
+    <circle cx="38" cy="390" r="2" fill="#bbbbee" opacity="0.65"/>
+
+    <g filter="url(#starGlow)">
+      <circle cx="350" cy="465" r="3.5" fill="#9999cc" opacity="0.5"/>
+    </g>
+    <circle cx="350" cy="465" r="2.2" fill="#bbbbee" opacity="0.65"/>
+
+    <g filter="url(#starGlow)">
+      <circle cx="175" cy="58" r="3" fill="#9999cc" opacity="0.55"/>
+    </g>
+    <circle cx="175" cy="58" r="2" fill="#bbbbee" opacity="0.7"/>
+
+    <g filter="url(#starGlow)">
+      <circle cx="380" cy="42" r="3" fill="#9999cc" opacity="0.5"/>
+    </g>
+    <circle cx="380" cy="42" r="2" fill="#bbbbee" opacity="0.65"/>
+
+    <g filter="url(#starGlow)">
+      <circle cx="100" cy="455" r="3" fill="#9999cc" opacity="0.48"/>
+    </g>
+    <circle cx="100" cy="455" r="2" fill="#bbbbee" opacity="0.65"/>
+
+    <g filter="url(#starGlow)">
+      <circle cx="455" cy="420" r="3" fill="#9999cc" opacity="0.48"/>
+    </g>
+    <circle cx="455" cy="420" r="2" fill="#bbbbee" opacity="0.6"/>
+
+    <!-- Faint constellation lines between noise stars — random, meaningless -->
+    <g stroke="#8888bb" stroke-width="1" opacity="0.25" fill="none">
+      <line x1="88" y1="75" x2="175" y2="58"/>
+      <line x1="175" y1="58" x2="215" y2="45"/>
+      <line x1="380" y1="42" x2="430" y2="68"/>
+      <line x1="430" y1="68" x2="468" y2="180"/>
+      <line x1="48" y1="215" x2="38" y2="390"/>
+      <line x1="475" y1="310" x2="455" y2="420"/>
+      <line x1="350" y1="465" x2="100" y2="455"/>
+      <line x1="88" y1="75" x2="48" y2="215"/>
+      <line x1="338" y1="30" x2="380" y2="42"/>
+    </g>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- TRANSITION STARS — being drawn toward the check  -->
+    <!-- These are noise stars shifting warm, with motion  -->
+    <!-- trails pointing inward toward the checkmark.      -->
+    <!-- The check is pulling them in.                     -->
+    <!-- ═══════════════════════════════════════════════ -->
+
+    <!-- Star drifting in from upper-left -->
+    <line x1="72" y1="195" x2="95" y2="220" stroke="#bb7788" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+    <g filter="url(#starGlow)">
+      <circle cx="72" cy="195" r="3" fill="#cc6677" opacity="0.5"/>
+    </g>
+    <circle cx="72" cy="195" r="2" fill="#dd8899" opacity="0.7"/>
+
+    <!-- Star drifting in from far left -->
+    <line x1="55" y1="330" x2="82" y2="320" stroke="#bb7788" stroke-width="1.2" stroke-linecap="round" opacity="0.25"/>
+    <g filter="url(#starGlow)">
+      <circle cx="55" cy="330" r="2.5" fill="#cc6677" opacity="0.45"/>
+    </g>
+    <circle cx="55" cy="330" r="1.8" fill="#dd8899" opacity="0.65"/>
+
+    <!-- Star drifting in from upper-right -->
+    <line x1="455" y1="110" x2="430" y2="128" stroke="#bb7788" stroke-width="1.5" stroke-linecap="round" opacity="0.3"/>
+    <g filter="url(#starGlow)">
+      <circle cx="455" cy="110" r="3" fill="#cc6677" opacity="0.5"/>
+    </g>
+    <circle cx="455" cy="110" r="2" fill="#dd8899" opacity="0.7"/>
+
+    <!-- Star drifting in from right -->
+    <line x1="440" y1="280" x2="410" y2="270" stroke="#bb7788" stroke-width="1.2" stroke-linecap="round" opacity="0.25"/>
+    <g filter="url(#starGlow)">
+      <circle cx="440" cy="280" r="2.5" fill="#cc6677" opacity="0.45"/>
+    </g>
+    <circle cx="440" cy="280" r="1.8" fill="#dd8899" opacity="0.65"/>
+
+    <!-- Star drifting in from below -->
+    <line x1="180" y1="440" x2="190" y2="415" stroke="#bb7788" stroke-width="1.3" stroke-linecap="round" opacity="0.25"/>
+    <g filter="url(#starGlow)">
+      <circle cx="180" cy="440" r="2.5" fill="#cc6677" opacity="0.45"/>
+    </g>
+    <circle cx="180" cy="440" r="1.8" fill="#dd8899" opacity="0.65"/>
+
+    <!-- Star drifting in from below-right -->
+    <line x1="360" y1="420" x2="340" y2="395" stroke="#bb7788" stroke-width="1.3" stroke-linecap="round" opacity="0.25"/>
+    <g filter="url(#starGlow)">
+      <circle cx="360" cy="420" r="2.5" fill="#cc6677" opacity="0.45"/>
+    </g>
+    <circle cx="360" cy="420" r="1.8" fill="#dd8899" opacity="0.65"/>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- CAPTURED STARS — locked into the checkmark path  -->
+    <!-- Bright warm red/coral, white-hot centers.         -->
+    <!-- These are the ones that made it. Wrangled.        -->
+    <!-- ═══════════════════════════════════════════════ -->
+
+    <!-- Checkmark anchor: start -->
+    <g filter="url(#brightStarGlow)">
+      <circle cx="120" cy="275" r="10" fill="#e94560" opacity="0.5"/>
+    </g>
+    <circle cx="120" cy="275" r="6" fill="#ff6b7a" opacity="0.9"/>
+    <circle cx="120" cy="275" r="3" fill="white" opacity="0.55"/>
+
+    <!-- Along the downstroke -->
+    <g filter="url(#starGlow)">
+      <circle cx="152" cy="312" r="6" fill="#e94560" opacity="0.45"/>
+    </g>
+    <circle cx="152" cy="312" r="4" fill="#ff6b7a" opacity="0.8"/>
+    <circle cx="152" cy="312" r="1.8" fill="white" opacity="0.4"/>
+
+    <g filter="url(#starGlow)">
+      <circle cx="178" cy="348" r="5" fill="#e94560" opacity="0.4"/>
+    </g>
+    <circle cx="178" cy="348" r="3.5" fill="#ff6b7a" opacity="0.75"/>
+    <circle cx="178" cy="348" r="1.5" fill="white" opacity="0.35"/>
+
+    <!-- Checkmark anchor: bend (brightest — the fulcrum) -->
+    <g filter="url(#wideGlow)">
+      <circle cx="215" cy="375" r="14" fill="#e94560" opacity="0.45"/>
+    </g>
+    <g filter="url(#brightStarGlow)">
+      <circle cx="215" cy="375" r="10" fill="#e94560" opacity="0.55"/>
+    </g>
+    <circle cx="215" cy="375" r="7" fill="#ff6b7a" opacity="0.9"/>
+    <circle cx="215" cy="375" r="3.5" fill="white" opacity="0.6"/>
+
+    <!-- Along the upstroke -->
+    <g filter="url(#starGlow)">
+      <circle cx="265" cy="315" r="6" fill="#e94560" opacity="0.42"/>
+    </g>
+    <circle cx="265" cy="315" r="4" fill="#ff6b7a" opacity="0.78"/>
+    <circle cx="265" cy="315" r="1.8" fill="white" opacity="0.35"/>
+
+    <g filter="url(#starGlow)">
+      <circle cx="315" cy="250" r="5" fill="#e94560" opacity="0.4"/>
+    </g>
+    <circle cx="315" cy="250" r="3.5" fill="#ff6b7a" opacity="0.75"/>
+    <circle cx="315" cy="250" r="1.5" fill="white" opacity="0.35"/>
+
+    <g filter="url(#starGlow)">
+      <circle cx="358" cy="198" r="6" fill="#e94560" opacity="0.42"/>
+    </g>
+    <circle cx="358" cy="198" r="4" fill="#ff6b7a" opacity="0.78"/>
+    <circle cx="358" cy="198" r="1.8" fill="white" opacity="0.35"/>
+
+    <!-- Checkmark anchor: tip -->
+    <g filter="url(#brightStarGlow)">
+      <circle cx="400" cy="148" r="10" fill="#e94560" opacity="0.5"/>
+    </g>
+    <circle cx="400" cy="148" r="6" fill="#ff6b7a" opacity="0.9"/>
+    <circle cx="400" cy="148" r="3" fill="white" opacity="0.55"/>
+
+    <!-- Constellation lines connecting captured stars — the pattern found -->
+    <g stroke="#e94560" stroke-width="1.8" opacity="0.4" fill="none" stroke-linecap="round">
+      <line x1="120" y1="275" x2="152" y2="312"/>
+      <line x1="152" y1="312" x2="178" y2="348"/>
+      <line x1="178" y1="348" x2="215" y2="375"/>
+      <line x1="215" y1="375" x2="265" y2="315"/>
+      <line x1="265" y1="315" x2="315" y2="250"/>
+      <line x1="315" y1="250" x2="358" y2="198"/>
+      <line x1="358" y1="198" x2="400" y2="148"/>
+    </g>
+
+    <!-- ═══════════════════════════════════════════════ -->
+    <!-- THE CHECKMARK — forged from the captured stars   -->
+    <!-- ═══════════════════════════════════════════════ -->
+
+    <!-- Wide glow behind -->
+    <path d="M120 275 L215 375 L400 148"
+      stroke="#e94560" stroke-width="55" stroke-linecap="round" stroke-linejoin="round"
+      fill="none" filter="url(#outerGlow)" opacity="0.25"/>
+
+    <g filter="url(#checkGlow)">
+      <!-- Shadow -->
+      <path d="M128 283 L222 383 L407 155"
+        stroke="#8a1530" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"
+        fill="none" opacity="0.25"/>
+      <!-- Main stroke -->
+      <path d="M120 275 L215 375 L400 148"
+        stroke="url(#checkGrad)" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"
+        fill="none"/>
+      <!-- Highlight -->
+      <path d="M125 270 L213 368 L396 145"
+        stroke="url(#checkShine)" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"
+        fill="none" opacity="0.5"/>
+    </g>
+
+    <!-- Sparks at tip — energy of completion -->
+    <g transform="translate(400 148)">
+      <line x1="0" y1="0" x2="-10" y2="-22" stroke="#ff8a95" stroke-width="2.5" stroke-linecap="round" opacity="0.55"/>
+      <line x1="0" y1="0" x2="12" y2="-18" stroke="#ff8a95" stroke-width="2" stroke-linecap="round" opacity="0.45"/>
+      <line x1="0" y1="0" x2="20" y2="-4" stroke="#ff8a95" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+      <line x1="0" y1="0" x2="15" y2="14" stroke="#ff8a95" stroke-width="1.8" stroke-linecap="round" opacity="0.28"/>
+      <circle cx="-14" cy="-28" r="2" fill="#ff8a95" opacity="0.5"/>
+      <circle cx="16" cy="-24" r="1.8" fill="white" opacity="0.4"/>
+      <circle cx="26" cy="-6" r="1.5" fill="#ff8a95" opacity="0.35"/>
+    </g>
+  </g>
 </svg>
