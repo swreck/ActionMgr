@@ -6,6 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Action Manager 1.0 — a personal PWA for tracking commitments. You speak naturally ("Call Mom before Friday"), the AI parses it into a structured action, and the app routes it to the right place and reminds you when it's actionable.
 
+## Product Intent
+
+**Why this exists:** Ken manages a high volume of commitments across personal and professional life. Traditional to-do apps require manual categorization, date-setting, and priority-sorting. This app's premise is that natural language input + AI parsing should handle all of that automatically — you just say what you need to do.
+
+**Core workflow:** Speak or type a commitment → AI extracts what it is, when it's due, who it involves, how urgent it is → action lands in the right container (Actionable Now, Waiting, Candidates) → triggers fire when it's time to act (date arrived, email reply received, web condition met) → complete or archive.
+
+**Key design decisions:**
+- Container-based routing, not priority lists — actions live in "Actionable Now," "Waiting" (blocked on a trigger), or "Candidates" (unconfirmed/someday)
+- Five trigger types: DATE_EXACT, DATE_WINDOW, EMAIL_REPLY, MANUAL_CHECK, WEB_CONDITION — this is what makes it more than a to-do list
+- Gmail scanning — the app reads Ken's inbox to detect when an email reply trigger has been satisfied
+- Tuning system — AI parsing rules progress through SHADOW → PROPOSED → ACTIVE stages, learning from Ken's corrections without breaking existing behavior
+- Optimistic concurrency (version fields) — prevents stale writes when multiple sessions are open
+- Siri voice capture + manual text — input should feel effortless
+
+**What makes this app "Ken's":** The commitment-tracking philosophy (not tasks, but commitments to people), the Gmail integration for email-reply triggers, the AI tuning loop that adapts to how Ken phrases things, and the assumption of a single user who manages complex multi-domain responsibilities.
+
 ## Running the app
 
 Both servers must run simultaneously. Open two terminal tabs:
