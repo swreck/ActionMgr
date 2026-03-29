@@ -24,7 +24,7 @@ function App() {
   useEffect(() => {
     checkHealth()
     loadGoalCount()
-    const interval = setInterval(() => { checkHealth(); loadGoalCount() }, 5 * 60 * 1000)
+    const interval = setInterval(() => { checkHealth(); loadGoalCount() }, 30 * 60 * 1000)
     return () => clearInterval(interval)
   }, [])
 

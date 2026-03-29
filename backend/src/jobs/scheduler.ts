@@ -18,8 +18,8 @@ export function initializeScheduler(): void {
     await runGmailScan()
   })
 
-  // Trigger check: every hour
-  cron.schedule('0 * * * *', async () => {
+  // Trigger check: every 6 hours (was hourly — too frequent for a lightweight app)
+  cron.schedule('0 */6 * * *', async () => {
     console.log('Running trigger check...')
     await checkTriggers()
   })
@@ -38,7 +38,7 @@ export function initializeScheduler(): void {
 
   console.log('Scheduler initialized with jobs:')
   console.log('  - Gmail scan: every 4 hours')
-  console.log('  - Trigger check: every hour')
+  console.log('  - Trigger check: every 6 hours')
   console.log('  - Follow-up check + WAITING safety net + missed recurrence + goal detection: 9 AM daily')
 }
 
@@ -140,18 +140,6 @@ async function checkTriggers(): Promise<void> {
         console.error(`Error firing trigger ${trigger.id}:`, err)
       }
     }
-
-    // Update check count for manual triggers (so we can track monitoring)
-    await prisma.trigger.updateMany({
-      where: {
-        type: 'MANUAL_CHECK',
-        isTriggered: false
-      },
-      data: {
-        lastChecked: now,
-        checkCount: { increment: 1 }
-      }
-    })
 
     // Check web condition triggers (at most once every 4 hours per trigger)
     const fourHoursAgo = new Date(now.getTime() - 4 * 60 * 60 * 1000)
@@ -291,53 +279,81 @@ async function checkFollowUps(): Promise<void> {
       LOW: 60 * 24 * 60 * 60 * 1000      // 2 months
     }
 
-    // Find stale actions in ACTIONABLE_NOW
+    // Only fetch actions old enough for the shortest interval (CRITICAL = 2 days)
+    const shortestInterval = intervals.CRITICAL
+    const oldestPossibleStale = new Date(now.getTime() - shortestInterval)
+
     const staleActions = await prisma.action.findMany({
       where: {
         container: 'ACTIONABLE_NOW',
         archivedAt: null,
-        completedAt: null
+        completedAt: null,
+        updatedAt: { lte: oldestPossibleStale }
       }
     })
 
+    if (staleActions.length === 0) {
+      console.log('Follow-up check complete: no stale actions')
+      return
+    }
+
+    // Filter to actions actually stale per their urgency
+    const needsFollowUp = staleActions.filter(action => {
+      const interval = intervals[action.urgency]
+      return action.updatedAt < new Date(now.getTime() - interval)
+    })
+
+    if (needsFollowUp.length === 0) {
+      console.log('Follow-up check complete: no actions past their urgency interval')
+      return
+    }
+
+    // Batch check: get all recent follow-up events for these actions in one query
+    const recentFollowUps = await prisma.actionEvent.findMany({
+      where: {
+        actionId: { in: needsFollowUp.map(a => a.id) },
+        type: 'FOLLOW_UP_SENT',
+        createdAt: { gte: oldestPossibleStale }
+      },
+      select: { actionId: true, createdAt: true }
+    })
+
+    // Build a map of actionId → most recent follow-up date
+    const followUpMap = new Map<number, Date>()
+    for (const fu of recentFollowUps) {
+      const existing = followUpMap.get(fu.actionId)
+      if (!existing || fu.createdAt > existing) {
+        followUpMap.set(fu.actionId, fu.createdAt)
+      }
+    }
+
     let followUpCount = 0
 
-    for (const action of staleActions) {
+    for (const action of needsFollowUp) {
       const interval = intervals[action.urgency]
       const staleSince = new Date(now.getTime() - interval)
+      const lastFollowUp = followUpMap.get(action.id)
 
-      // Check if action hasn't been updated within its urgency interval
-      if (action.updatedAt < staleSince) {
-        // Check if we already sent a recent follow-up
-        const recentFollowUp = await prisma.actionEvent.findFirst({
-          where: {
-            actionId: action.id,
-            type: 'FOLLOW_UP_SENT',
-            createdAt: { gte: staleSince }
-          }
-        })
+      // Skip if we already sent a follow-up within this urgency interval
+      if (lastFollowUp && lastFollowUp >= staleSince) continue
 
-        if (!recentFollowUp) {
-          // Log follow-up event
-          await prisma.actionEvent.create({
-            data: {
-              actionId: action.id,
-              type: 'FOLLOW_UP_SENT',
-              details: JSON.stringify({
-                reason: 'No activity since ' + action.updatedAt.toISOString(),
-                urgency: action.urgency
-              })
-            }
+      await prisma.actionEvent.create({
+        data: {
+          actionId: action.id,
+          type: 'FOLLOW_UP_SENT',
+          details: JSON.stringify({
+            reason: 'No activity since ' + action.updatedAt.toISOString(),
+            urgency: action.urgency
           })
-
-          followUpCount++
-          await sendPushNotification(
-            'Still important?',
-            `"${action.description.substring(0, 60)}" needs your attention`
-          ).catch(() => {})
-          console.log(`Follow-up needed for action ${action.id}: ${action.description.substring(0, 50)}`)
         }
-      }
+      })
+
+      followUpCount++
+      await sendPushNotification(
+        'Still important?',
+        `"${action.description.substring(0, 60)}" needs your attention`
+      ).catch(() => {})
+      console.log(`Follow-up needed for action ${action.id}: ${action.description.substring(0, 50)}`)
     }
 
     console.log(`Follow-up check complete: ${followUpCount} actions need attention`)
