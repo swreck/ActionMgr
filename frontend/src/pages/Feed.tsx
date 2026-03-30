@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Action, Container, CONTAINER_LABELS } from '../types'
-import { getActions, getActionsByFlag, deleteAction, bulkCompleteActions, bulkDeleteActions, bulkMoveActions } from '../api/client'
+import { getActions, getActionsByFlag, deleteAction, completeAction, updateAction, createTrigger, bulkCompleteActions, bulkDeleteActions, bulkMoveActions } from '../api/client'
 import ActionCard from '../components/ActionCard'
 import { refreshCounts } from '../components/ContainerNav'
 import QuickCapture from '../components/QuickCapture'
@@ -153,6 +153,29 @@ export default function Feed({ activeContainer, flagFilter, onDataChange, onOpen
     }
   }
 
+  async function handleSwipeComplete(id: number) {
+    try {
+      await completeAction(id)
+      loadActions()
+      refreshCounts()
+    } catch (err) {
+      console.error('Swipe complete failed:', err)
+    }
+  }
+
+  async function handlePostpone(id: number, date: string) {
+    try {
+      const action = actions.find(a => a.id === id)
+      if (!action) return
+      await updateAction(id, { dueDate: date, version: action.version })
+      await createTrigger({ actionId: id, type: 'DATE_EXACT', triggerDate: date })
+      loadActions()
+      refreshCounts()
+    } catch (err) {
+      console.error('Postpone failed:', err)
+    }
+  }
+
   function exitSelectionAndRefresh() {
     setSelectionMode(false)
     setSelectedIds(new Set())
@@ -216,6 +239,8 @@ export default function Feed({ activeContainer, flagFilter, onDataChange, onOpen
             key={action.id}
             action={action}
             onDelete={handleSwipeDelete}
+            onComplete={handleSwipeComplete}
+            onPostpone={handlePostpone}
             selectable={selectionMode}
             selected={selectedIds.has(action.id)}
             onSelect={toggleSelect}
@@ -237,7 +262,7 @@ export default function Feed({ activeContainer, flagFilter, onDataChange, onOpen
             onClick={handleBulkComplete}
             disabled={bulkLoading}
           >
-            Complete ({selectionCount})
+            Kept ({selectionCount})
           </button>
           <button
             className="bulk-btn bulk-delete"

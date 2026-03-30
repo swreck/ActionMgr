@@ -1,4 +1,4 @@
-import { Action, Container, ContainerCounts, FlagCounts, Urgency } from '../types'
+import { Action, Container, ContainerCounts, FlagCounts, Urgency, PromisesData, WeeklyReviewData, MorningBriefData } from '../types'
 
 const API_BASE = '/api'
 
@@ -617,6 +617,30 @@ export async function submitTuningFeedback(
     method: 'POST',
     body: JSON.stringify({ actionId, feedbackType, correction })
   })
+}
+
+// Promises / 2.0 endpoints
+export async function getPromisesToday(): Promise<PromisesData> {
+  return request<PromisesData>('/promises/today')
+}
+
+export async function getWeeklyReview(): Promise<WeeklyReviewData> {
+  return request<WeeklyReviewData>('/promises/weekly')
+}
+
+export async function getMorningBrief(): Promise<MorningBriefData> {
+  return request<MorningBriefData>('/promises/brief')
+}
+
+export async function updateSettings(settings: Record<string, string>): Promise<void> {
+  await request('/system/settings', {
+    method: 'PUT',
+    body: JSON.stringify(settings)
+  })
+}
+
+export async function getSettings(): Promise<Record<string, string>> {
+  return request<Record<string, string>>('/system/settings')
 }
 
 // Flag counts endpoint

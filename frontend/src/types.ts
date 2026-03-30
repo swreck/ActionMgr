@@ -129,3 +129,43 @@ export const TRIGGER_TYPE_LABELS: Record<TriggerType, string> = {
   MANUAL_CHECK: 'Manual Check',
   WEB_CONDITION: 'Web Monitor'
 }
+
+// 2.0 types
+
+export interface Party {
+  id: number
+  name: string
+  email?: string | null
+  phone?: string | null
+}
+
+export interface ActionWithParties extends Action {
+  parties?: Party[]
+}
+
+export interface PromisesData {
+  dueToday: ActionWithParties[]
+  becameReady: ActionWithParties[]
+  atRisk: ActionWithParties[]
+  comingUp: ActionWithParties[]
+}
+
+export interface WeeklyReviewData {
+  keptThisWeek: ActionWithParties[]
+  atRisk: ActionWithParties[]
+  comingUp: ActionWithParties[]
+  stats: {
+    keptCount: number
+    totalActive: number
+  }
+}
+
+export interface MorningBriefData {
+  dueToday: number
+  overdue: number
+  becameReadyOvernight: number
+  atRisk: number
+  weekAhead: number
+  summary: string
+  peopleDueToday: string[]
+}

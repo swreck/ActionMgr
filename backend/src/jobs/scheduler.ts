@@ -5,6 +5,8 @@ import { isGmailConnected } from '../services/gmail/auth'
 import { checkWebCondition } from '../services/ai/web-checker'
 import { sendPushNotification } from '../services/notifications'
 import { runGoalDetection } from '../services/ai/goal-detector'
+import { composeMorningBrief } from '../services/morning-brief'
+import { queueOrSendNotification, drainQueue } from '../services/notification-queue'
 
 /**
  * Initialize all scheduled jobs
@@ -36,10 +38,16 @@ export function initializeScheduler(): void {
     await runGoalDetection()
   })
 
+  // Morning/evening brief dispatcher: check every 15 minutes
+  cron.schedule('*/15 * * * *', async () => {
+    await checkAndSendBriefs()
+  })
+
   console.log('Scheduler initialized with jobs:')
   console.log('  - Gmail scan: every 4 hours')
   console.log('  - Trigger check: every 6 hours')
   console.log('  - Follow-up check + WAITING safety net + missed recurrence + goal detection: 9 AM daily')
+  console.log('  - Morning/evening brief dispatcher: every 15 minutes')
 }
 
 /**
@@ -130,8 +138,8 @@ async function checkTriggers(): Promise<void> {
             }
           })
 
-          await sendPushNotification(
-            'Action Ready',
+          await queueOrSendNotification(
+            'Promise Ready',
             `"${trigger.action.description.substring(0, 60)}" is now actionable`
           )
           console.log(`Trigger fired for action ${trigger.actionId}: ${trigger.description}`)
@@ -197,7 +205,7 @@ async function checkTriggers(): Promise<void> {
               }
             })
 
-            await sendPushNotification(
+            await queueOrSendNotification(
               'Condition Met',
               `"${trigger.action.description.substring(0, 60)}" is now actionable`
             )
@@ -349,7 +357,7 @@ async function checkFollowUps(): Promise<void> {
       })
 
       followUpCount++
-      await sendPushNotification(
+      await queueOrSendNotification(
         'Still important?',
         `"${action.description.substring(0, 60)}" needs your attention`
       ).catch(() => {})
@@ -512,5 +520,128 @@ export async function triggerGoalDetection(): Promise<{ success: boolean; messag
     return { success: true, message: `Goal detection completed: ${result.suggestionsCreated} suggestions created`, suggestionsCreated: result.suggestionsCreated }
   } catch (err) {
     return { success: false, message: err instanceof Error ? err.message : 'Goal detection failed' }
+  }
+}
+
+/**
+ * Check if it's time to send morning or evening brief, and send if so.
+ */
+async function checkAndSendBriefs(): Promise<void> {
+  try {
+    // Get user's timezone
+    const tzSetting = await prisma.systemSetting.findUnique({ where: { key: 'timezone' } })
+    const tz = tzSetting?.value || 'America/New_York'
+
+    const now = new Date()
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    })
+    const currentTime = formatter.format(now)
+
+    const dateFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    })
+    const todayStr = dateFormatter.format(now)
+
+    // Morning brief
+    const briefTimeSetting = await prisma.systemSetting.findUnique({ where: { key: 'morningBriefTime' } })
+    const briefTime = briefTimeSetting?.value || '08:00'
+
+    // Check if within the 15-minute window of brief time
+    const briefHour = parseInt(briefTime.split(':')[0])
+    const briefMinute = parseInt(briefTime.split(':')[1])
+    const currentHour = parseInt(currentTime.split(':')[0])
+    const currentMinute = parseInt(currentTime.split(':')[1])
+    const briefMinutes = briefHour * 60 + briefMinute
+    const currentMinutes = currentHour * 60 + currentMinute
+
+    if (currentMinutes >= briefMinutes && currentMinutes < briefMinutes + 15) {
+      // Check if already sent today
+      const lastBrief = await prisma.systemSetting.findUnique({ where: { key: 'lastMorningBrief' } })
+      if (!lastBrief || lastBrief.value !== todayStr) {
+        const brief = await composeMorningBrief()
+        const queued = await drainQueue()
+
+        let message = brief.summary
+        if (queued.length > 0) {
+          message += ` (${queued.length} notification${queued.length !== 1 ? 's' : ''} queued overnight)`
+        }
+
+        await sendPushNotification('Morning Brief', message)
+
+        await prisma.systemSetting.upsert({
+          where: { key: 'lastMorningBrief' },
+          update: { value: todayStr },
+          create: { key: 'lastMorningBrief', value: todayStr }
+        })
+
+        console.log(`Morning brief sent: ${brief.summary}`)
+      }
+    }
+
+    // Evening brief (if enabled)
+    const eveningEnabled = await prisma.systemSetting.findUnique({ where: { key: 'eveningBriefEnabled' } })
+    if (eveningEnabled?.value === 'true') {
+      const eveningTimeSetting = await prisma.systemSetting.findUnique({ where: { key: 'eveningBriefTime' } })
+      const eveningTime = eveningTimeSetting?.value || '18:00'
+      const eveningHour = parseInt(eveningTime.split(':')[0])
+      const eveningMinute = parseInt(eveningTime.split(':')[1])
+      const eveningMinutes = eveningHour * 60 + eveningMinute
+
+      if (currentMinutes >= eveningMinutes && currentMinutes < eveningMinutes + 15) {
+        const lastEvening = await prisma.systemSetting.findUnique({ where: { key: 'lastEveningBrief' } })
+        if (!lastEvening || lastEvening.value !== todayStr) {
+          // Compose evening summary
+          const startOfToday = new Date(now)
+          startOfToday.setHours(0, 0, 0, 0)
+
+          const [completedToday, createdToday, dueTomorrow] = await Promise.all([
+            prisma.action.count({
+              where: { completedAt: { gte: startOfToday } }
+            }),
+            prisma.action.count({
+              where: { createdAt: { gte: startOfToday }, archivedAt: null }
+            }),
+            prisma.action.count({
+              where: {
+                dueDate: {
+                  gte: new Date(now.getTime() + 24 * 60 * 60 * 1000 - now.getHours() * 3600000),
+                  lt: new Date(now.getTime() + 48 * 60 * 60 * 1000 - now.getHours() * 3600000)
+                },
+                archivedAt: null,
+                completedAt: null
+              }
+            })
+          ])
+
+          const parts: string[] = []
+          if (completedToday > 0) parts.push(`You kept ${completedToday} promise${completedToday !== 1 ? 's' : ''} today`)
+          if (createdToday > 0) parts.push(`${createdToday} new captured`)
+          if (dueTomorrow > 0) parts.push(`${dueTomorrow} due tomorrow`)
+
+          const eveningMsg = parts.length > 0
+            ? parts.join('. ') + '.'
+            : 'Quiet day. Nothing due tomorrow.'
+
+          await sendPushNotification('Evening Wrap-up', eveningMsg)
+
+          await prisma.systemSetting.upsert({
+            where: { key: 'lastEveningBrief' },
+            update: { value: todayStr },
+            create: { key: 'lastEveningBrief', value: todayStr }
+          })
+
+          console.log(`Evening brief sent: ${eveningMsg}`)
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Brief dispatcher failed:', err)
   }
 }

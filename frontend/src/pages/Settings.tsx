@@ -12,7 +12,9 @@ import {
   subscribeToPush,
   unsubscribeFromPush,
   runFollowUpCheck,
-  runTriggerCheck
+  runTriggerCheck,
+  getSettings,
+  updateSettings
 } from '../api/client'
 import ConfirmModal from '../components/ConfirmModal'
 
@@ -32,11 +34,36 @@ export default function Settings({ onClose }: SettingsProps) {
   const [toolRunning, setToolRunning] = useState<string | null>(null)
   const [toolResult, setToolResult] = useState<{ key: string; message: string; success: boolean } | null>(null)
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
+  const [morningBriefTime, setMorningBriefTime] = useState('08:00')
+  const [eveningBriefEnabled, setEveningBriefEnabled] = useState(false)
+  const [eveningBriefTime, setEveningBriefTime] = useState('18:00')
+  const [weeklyReviewDay, setWeeklyReviewDay] = useState('0')
 
   useEffect(() => {
     loadData()
     checkNotificationStatus()
+    loadBriefSettings()
   }, [])
+
+  async function loadBriefSettings() {
+    try {
+      const settings = await getSettings()
+      if (settings.morningBriefTime) setMorningBriefTime(settings.morningBriefTime)
+      if (settings.eveningBriefEnabled) setEveningBriefEnabled(settings.eveningBriefEnabled === 'true')
+      if (settings.eveningBriefTime) setEveningBriefTime(settings.eveningBriefTime)
+      if (settings.weeklyReviewDay) setWeeklyReviewDay(settings.weeklyReviewDay)
+    } catch {
+      // use defaults
+    }
+  }
+
+  async function saveBriefSetting(key: string, value: string) {
+    try {
+      await updateSettings({ [key]: value })
+    } catch (err) {
+      console.error('Failed to save setting:', err)
+    }
+  }
 
   async function loadData() {
     setLoading(true)
@@ -343,13 +370,80 @@ export default function Settings({ onClose }: SettingsProps) {
               </div>
             </div>
 
+            {/* Morning Brief Settings */}
+            <div className="settings-section">
+              <h3 className="settings-section-title">Daily Briefs</h3>
+              <div className="settings-briefs">
+                <div className="brief-setting-row">
+                  <span className="brief-setting-label">Morning brief</span>
+                  <input
+                    type="time"
+                    className="brief-time-input"
+                    value={morningBriefTime}
+                    onChange={e => {
+                      setMorningBriefTime(e.target.value)
+                      saveBriefSetting('morningBriefTime', e.target.value)
+                    }}
+                  />
+                </div>
+                <div className="brief-setting-row">
+                  <span className="brief-setting-label">Evening wrap-up</span>
+                  <div className="brief-setting-toggle-group">
+                    <input
+                      type="time"
+                      className="brief-time-input"
+                      value={eveningBriefTime}
+                      disabled={!eveningBriefEnabled}
+                      onChange={e => {
+                        setEveningBriefTime(e.target.value)
+                        saveBriefSetting('eveningBriefTime', e.target.value)
+                      }}
+                    />
+                    <label className="brief-toggle-label">
+                      <input
+                        type="checkbox"
+                        checked={eveningBriefEnabled}
+                        onChange={e => {
+                          setEveningBriefEnabled(e.target.checked)
+                          saveBriefSetting('eveningBriefEnabled', String(e.target.checked))
+                        }}
+                      />
+                      {eveningBriefEnabled ? 'On' : 'Off'}
+                    </label>
+                  </div>
+                </div>
+                <div className="brief-setting-row">
+                  <span className="brief-setting-label">Weekly check-in</span>
+                  <select
+                    className="brief-day-select"
+                    value={weeklyReviewDay}
+                    onChange={e => {
+                      setWeeklyReviewDay(e.target.value)
+                      saveBriefSetting('weeklyReviewDay', e.target.value)
+                    }}
+                  >
+                    <option value="0">Sunday</option>
+                    <option value="1">Monday</option>
+                    <option value="2">Tuesday</option>
+                    <option value="3">Wednesday</option>
+                    <option value="4">Thursday</option>
+                    <option value="5">Friday</option>
+                    <option value="6">Saturday</option>
+                  </select>
+                </div>
+                <p className="brief-note">
+                  Notifications batch overnight and arrive with your morning brief.
+                </p>
+              </div>
+            </div>
+
             {/* Scan Schedule Info */}
             <div className="settings-section">
               <h3 className="settings-section-title">Scan Schedule</h3>
               <div className="settings-schedule">
                 <p>Automatic Gmail scans run every 4 hours.</p>
                 <p className="schedule-note">
-                  Trigger checks run hourly. Web conditions checked every 4 hours per trigger. Follow-up reminders sent daily at 9 AM.
+                  Trigger checks every 6 hours. Web conditions every 4 hours per trigger. Follow-up reminders at 9 AM daily.
                 </p>
               </div>
             </div>
@@ -408,9 +502,9 @@ export default function Settings({ onClose }: SettingsProps) {
             <div className="settings-section">
               <h3 className="settings-section-title">About</h3>
               <p className="settings-about">
-                Action Manager v1.0
+                Action Manager v2.0
                 <br />
-                Your personal commitment tracker
+                Your promise-keeping partner
               </p>
             </div>
           </>
@@ -642,6 +736,62 @@ export default function Settings({ onClose }: SettingsProps) {
             font-size: 14px;
             color: var(--text-secondary);
             line-height: 1.6;
+          }
+          .settings-briefs {
+            background-color: var(--bg-card);
+            border-radius: 8px;
+            padding: 12px;
+          }
+          .brief-setting-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+          }
+          .brief-setting-row:last-of-type {
+            border-bottom: none;
+          }
+          .brief-setting-label {
+            color: var(--text-secondary);
+            font-size: 14px;
+          }
+          .brief-time-input {
+            padding: 6px 10px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--separator);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+          }
+          .brief-setting-toggle-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+          }
+          .brief-toggle-label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            cursor: pointer;
+          }
+          .brief-day-select {
+            padding: 6px 10px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--separator);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+          }
+          .brief-note {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 8px;
+            line-height: 1.5;
           }
         `}</style>
       </div>

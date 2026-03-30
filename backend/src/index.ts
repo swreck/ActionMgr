@@ -13,6 +13,7 @@ import searchRouter from './routes/search'
 import groupsRouter from './routes/groups'
 import tuningRouter from './routes/tuning'
 import notificationsRouter from './routes/notifications'
+import promisesRouter from './routes/promises'
 import { initializeScheduler } from './jobs/scheduler'
 import { initPushNotifications } from './services/notifications'
 
@@ -35,6 +36,7 @@ app.use('/api/search', searchRouter)
 app.use('/api/groups', groupsRouter)
 app.use('/api/tuning', tuningRouter)
 app.use('/api/notifications', notificationsRouter)
+app.use('/api/promises', promisesRouter)
 
 // Health check
 app.get('/health', (_req, res) => {
