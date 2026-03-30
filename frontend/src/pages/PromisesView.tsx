@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { PromisesData, ActionWithParties, MorningBriefData } from '../types'
-import { getPromisesToday, getMorningBrief, completeAction, updateAction, deleteAction, createTrigger } from '../api/client'
+import { getPromisesToday, getMorningBrief, completeAction, updateAction, deleteAction, createTrigger, bulkCompleteActions, bulkDeleteActions } from '../api/client'
 import ActionCard from '../components/ActionCard'
 import ActionView from './ActionView'
 import QuickCapture from '../components/QuickCapture'
@@ -18,6 +18,9 @@ export default function PromisesView({ onShowFeed, onShowWeeklyReview, showWeekl
   const [loading, setLoading] = useState(true)
   const [selectedActionId, setSelectedActionId] = useState<number | null>(null)
   const [showCapture, setShowCapture] = useState(false)
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [bulkLoading, setBulkLoading] = useState(false)
 
   useEffect(() => {
     loadData()
@@ -107,6 +110,71 @@ export default function PromisesView({ onShowFeed, onShowWeeklyReview, showWeekl
     }
   }
 
+  // -- Bulk selection --
+
+  function getAllActions(): ActionWithParties[] {
+    if (!data) return []
+    return [...data.dueToday, ...data.becameReady, ...data.atRisk, ...data.comingUp]
+  }
+
+  function toggleSelect(id: number) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function toggleSelectAll() {
+    const all = getAllActions()
+    if (selectedIds.size === all.length) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(all.map(a => a.id)))
+    }
+  }
+
+  function exitSelection() {
+    setSelectionMode(false)
+    setSelectedIds(new Set())
+  }
+
+  async function handleBulkDelete() {
+    if (selectedIds.size === 0) return
+    setBulkLoading(true)
+    const ids = Array.from(selectedIds)
+    // Optimistic removal
+    for (const id of ids) removeFromData(id)
+    exitSelection()
+    try {
+      await bulkDeleteActions(ids)
+      refreshCounts()
+    } catch (err) {
+      console.error('Bulk delete failed:', err)
+      loadData()
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
+  async function handleBulkComplete() {
+    if (selectedIds.size === 0) return
+    setBulkLoading(true)
+    const ids = Array.from(selectedIds)
+    for (const id of ids) removeFromData(id)
+    exitSelection()
+    try {
+      await bulkCompleteActions(ids)
+      refreshCounts()
+    } catch (err) {
+      console.error('Bulk complete failed:', err)
+      loadData()
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
   function handleActionCreated() {
     setShowCapture(false)
     loadData()
@@ -147,6 +215,28 @@ export default function PromisesView({ onShowFeed, onShowWeeklyReview, showWeekl
         </button>
       )}
 
+      {/* Select button + select-all row */}
+      {!isEmpty && (
+        <div className="promises-select-header">
+          <button className="feed-select-toggle" onClick={() => selectionMode ? exitSelection() : setSelectionMode(true)}>
+            {selectionMode ? 'Cancel' : 'Select'}
+          </button>
+        </div>
+      )}
+
+      {selectionMode && getAllActions().length > 0 && (
+        <div className="feed-select-all">
+          <label className="select-all-label">
+            <input
+              type="checkbox"
+              checked={selectedIds.size === getAllActions().length}
+              onChange={toggleSelectAll}
+            />
+            Select All ({getAllActions().length})
+          </label>
+        </div>
+      )}
+
       {isEmpty ? (
         <div className="promises-empty">
           <svg className="promises-empty-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -170,10 +260,13 @@ export default function PromisesView({ onShowFeed, onShowWeeklyReview, showWeekl
                   key={action.id}
                   action={action}
                   personLabel={getPersonLabel(action)}
-                  onClick={() => setSelectedActionId(action.id)}
+                  onClick={() => selectionMode ? toggleSelect(action.id) : setSelectedActionId(action.id)}
                   onDelete={handleDelete}
                   onComplete={handleComplete}
                   onPostpone={handlePostpone}
+                  selectable={selectionMode}
+                  selected={selectedIds.has(action.id)}
+                  onSelect={toggleSelect}
                 />
               ))}
             </PromisesSection>
@@ -191,10 +284,13 @@ export default function PromisesView({ onShowFeed, onShowWeeklyReview, showWeekl
                   key={action.id}
                   action={action}
                   personLabel={getPersonLabel(action)}
-                  onClick={() => setSelectedActionId(action.id)}
+                  onClick={() => selectionMode ? toggleSelect(action.id) : setSelectedActionId(action.id)}
                   onDelete={handleDelete}
                   onComplete={handleComplete}
                   onPostpone={handlePostpone}
+                  selectable={selectionMode}
+                  selected={selectedIds.has(action.id)}
+                  onSelect={toggleSelect}
                 />
               ))}
             </PromisesSection>
@@ -212,10 +308,13 @@ export default function PromisesView({ onShowFeed, onShowWeeklyReview, showWeekl
                   key={action.id}
                   action={action}
                   personLabel={getPersonLabel(action)}
-                  onClick={() => setSelectedActionId(action.id)}
+                  onClick={() => selectionMode ? toggleSelect(action.id) : setSelectedActionId(action.id)}
                   onDelete={handleDelete}
                   onComplete={handleComplete}
                   onPostpone={handlePostpone}
+                  selectable={selectionMode}
+                  selected={selectedIds.has(action.id)}
+                  onSelect={toggleSelect}
                 />
               ))}
             </PromisesSection>
@@ -233,10 +332,13 @@ export default function PromisesView({ onShowFeed, onShowWeeklyReview, showWeekl
                   key={action.id}
                   action={action}
                   personLabel={getPersonLabel(action)}
-                  onClick={() => setSelectedActionId(action.id)}
+                  onClick={() => selectionMode ? toggleSelect(action.id) : setSelectedActionId(action.id)}
                   onDelete={handleDelete}
                   onComplete={handleComplete}
                   onPostpone={handlePostpone}
+                  selectable={selectionMode}
+                  selected={selectedIds.has(action.id)}
+                  onSelect={toggleSelect}
                 />
               ))}
             </PromisesSection>
@@ -248,6 +350,18 @@ export default function PromisesView({ onShowFeed, onShowWeeklyReview, showWeekl
       <button className="promises-show-all" onClick={onShowFeed}>
         View all actions
       </button>
+
+      {/* Bulk toolbar */}
+      {selectionMode && selectedIds.size > 0 && (
+        <div className="bulk-toolbar">
+          <button className="bulk-btn bulk-complete" onClick={handleBulkComplete} disabled={bulkLoading}>
+            Kept ({selectedIds.size})
+          </button>
+          <button className="bulk-btn bulk-delete" onClick={handleBulkDelete} disabled={bulkLoading}>
+            Delete ({selectedIds.size})
+          </button>
+        </div>
+      )}
 
       {/* FAB */}
       <button className="quick-capture" onClick={() => setShowCapture(true)}>+</button>

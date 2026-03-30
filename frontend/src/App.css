@@ -1450,6 +1450,13 @@ body {
   color: var(--text-secondary);
 }
 
+/* ─── Promises Select Header ─────────────────────────────────────────── */
+.promises-select-header {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 0 0;
+}
+
 /* ─── Show All Link ──────────────────────────────────────────────────── */
 .promises-show-all {
   display: block;
