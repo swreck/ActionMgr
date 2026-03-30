@@ -45,7 +45,7 @@ export default function PromisesView({ onShowFeed, onShowWeeklyReview, showWeekl
   function getPersonLabel(action: ActionWithParties): string | undefined {
     if (action.parties && action.parties.length > 0) {
       const names = action.parties.map(p => p.name).slice(0, 2)
-      return `Promise to ${names.join(' & ')}`
+      return `To ${names.join(' & ')}`
     }
     if (action.source?.type === 'GMAIL' && action.source.emailFrom) {
       const email = action.source.emailFrom
@@ -244,7 +244,7 @@ export default function PromisesView({ onShowFeed, onShowWeeklyReview, showWeekl
             <polyline points="22 4 12 14.01 9 11.01"/>
           </svg>
           <div className="promises-empty-title">All clear</div>
-          <div className="promises-empty-subtitle">No promises need attention today.</div>
+          <div className="promises-empty-subtitle">Nothing needs attention today.</div>
         </div>
       ) : (
         <>
@@ -355,7 +355,7 @@ export default function PromisesView({ onShowFeed, onShowWeeklyReview, showWeekl
       {selectionMode && selectedIds.size > 0 && (
         <div className="bulk-toolbar">
           <button className="bulk-btn bulk-complete" onClick={handleBulkComplete} disabled={bulkLoading}>
-            Kept ({selectedIds.size})
+            Complete ({selectedIds.size})
           </button>
           <button className="bulk-btn bulk-delete" onClick={handleBulkDelete} disabled={bulkLoading}>
             Delete ({selectedIds.size})

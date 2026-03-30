@@ -265,7 +265,7 @@ export default function Feed({ activeContainer, flagFilter, onDataChange, onOpen
             onClick={handleBulkComplete}
             disabled={bulkLoading}
           >
-            Kept ({selectionCount})
+            Complete ({selectionCount})
           </button>
           <button
             className="bulk-btn bulk-delete"

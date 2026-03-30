@@ -139,7 +139,7 @@ async function checkTriggers(): Promise<void> {
           })
 
           await queueOrSendNotification(
-            'Promise Ready',
+            'Action Ready',
             `"${trigger.action.description.substring(0, 60)}" is now actionable`
           )
           console.log(`Trigger fired for action ${trigger.actionId}: ${trigger.description}`)
@@ -621,7 +621,7 @@ async function checkAndSendBriefs(): Promise<void> {
           ])
 
           const parts: string[] = []
-          if (completedToday > 0) parts.push(`You kept ${completedToday} promise${completedToday !== 1 ? 's' : ''} today`)
+          if (completedToday > 0) parts.push(`${completedToday} completed today`)
           if (createdToday > 0) parts.push(`${createdToday} new captured`)
           if (dueTomorrow > 0) parts.push(`${dueTomorrow} due tomorrow`)
 

@@ -504,7 +504,7 @@ export default function Settings({ onClose }: SettingsProps) {
               <p className="settings-about">
                 Action Manager v2.0
                 <br />
-                Your promise-keeping partner
+                Your personal commitment tracker
               </p>
             </div>
           </>

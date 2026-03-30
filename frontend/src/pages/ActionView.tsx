@@ -772,7 +772,7 @@ export default function ActionView({ actionId, onClose, onUpdate }: ActionViewPr
                 Edit
               </button>
               <button className="btn btn-success" onClick={handleComplete}>
-                Promise Kept{action.recurrenceRule ? ' — Next' : ''}
+                Complete{action.recurrenceRule ? ' & Next' : ''}
               </button>
             </div>
 

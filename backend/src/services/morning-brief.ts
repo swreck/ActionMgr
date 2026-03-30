@@ -101,7 +101,7 @@ export async function composeMorningBrief(): Promise<MorningBriefData> {
   const dueCount = dueTodayActions.length
 
   if (dueCount > 0) {
-    let dueMsg = `${dueCount} promise${dueCount !== 1 ? 's' : ''} due today`
+    let dueMsg = `${dueCount} due today`
     if (peopleDueToday.length > 0 && peopleDueToday.length <= 2) {
       dueMsg += ` (to ${peopleDueToday.join(' and ')})`
     }
@@ -122,7 +122,7 @@ export async function composeMorningBrief(): Promise<MorningBriefData> {
 
   const summary = parts.length > 0
     ? `Good morning. ${parts.join('. ')}.`
-    : 'Good morning. All clear — no promises need attention today.'
+    : 'Good morning. All clear — nothing needs attention today.'
 
   return {
     dueToday: dueCount,

@@ -104,16 +104,16 @@ export default function WeeklyReview({ onClose }: WeeklyReviewProps) {
           <div className="weekly-loading">Loading your week...</div>
         ) : data ? (
           <div className="weekly-sections">
-            {/* Promises Kept */}
+            {/* Completed */}
             <div className="weekly-section">
               <h3 className="weekly-section-title weekly-section-kept">
-                Promises you kept
+                Completed this week
                 {data.keptThisWeek.length > 0 && (
                   <span className="weekly-section-count">{data.keptThisWeek.length}</span>
                 )}
               </h3>
               {data.keptThisWeek.length === 0 ? (
-                <p className="weekly-empty">No promises completed this week.</p>
+                <p className="weekly-empty">Nothing completed this week.</p>
               ) : (
                 <div className="weekly-kept-list">
                   {data.keptThisWeek.map(action => {
@@ -134,11 +134,11 @@ export default function WeeklyReview({ onClose }: WeeklyReviewProps) {
               )}
             </div>
 
-            {/* Promises at Risk */}
+            {/* At Risk */}
             {data.atRisk.length > 0 && (
               <div className="weekly-section">
                 <h3 className="weekly-section-title weekly-section-risk">
-                  Promises at risk
+                  At risk
                   <span className="weekly-section-count">{data.atRisk.length}</span>
                 </h3>
                 <p className="weekly-section-desc">These have been sitting a while. What would you like to do?</p>
