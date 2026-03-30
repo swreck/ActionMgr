@@ -144,22 +144,24 @@ export default function Feed({ activeContainer, flagFilter, onDataChange, onOpen
   }
 
   async function handleSwipeDelete(id: number) {
+    setActions(prev => prev.filter(a => a.id !== id))
     try {
       await deleteAction(id)
-      loadActions()
       refreshCounts()
     } catch (err) {
       console.error('Swipe delete failed:', err)
+      loadActions() // re-fetch on error to restore correct state
     }
   }
 
   async function handleSwipeComplete(id: number) {
+    setActions(prev => prev.filter(a => a.id !== id))
     try {
       await completeAction(id)
-      loadActions()
       refreshCounts()
     } catch (err) {
       console.error('Swipe complete failed:', err)
+      loadActions()
     }
   }
 
@@ -167,12 +169,13 @@ export default function Feed({ activeContainer, flagFilter, onDataChange, onOpen
     try {
       const action = actions.find(a => a.id === id)
       if (!action) return
+      setActions(prev => prev.filter(a => a.id !== id))
       await updateAction(id, { dueDate: date, version: action.version })
       await createTrigger({ actionId: id, type: 'DATE_EXACT', triggerDate: date })
-      loadActions()
       refreshCounts()
     } catch (err) {
       console.error('Postpone failed:', err)
+      loadActions()
     }
   }
 

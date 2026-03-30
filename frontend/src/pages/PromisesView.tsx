@@ -52,23 +52,34 @@ export default function PromisesView({ onShowFeed, onShowWeeklyReview, showWeekl
     return undefined
   }
 
+  function removeFromData(id: number) {
+    setData(prev => prev ? {
+      dueToday: prev.dueToday.filter(a => a.id !== id),
+      becameReady: prev.becameReady.filter(a => a.id !== id),
+      atRisk: prev.atRisk.filter(a => a.id !== id),
+      comingUp: prev.comingUp.filter(a => a.id !== id)
+    } : null)
+  }
+
   async function handleComplete(id: number) {
+    removeFromData(id)
     try {
       await completeAction(id)
-      loadData()
       refreshCounts()
     } catch (err) {
       console.error('Complete failed:', err)
+      loadData()
     }
   }
 
   async function handleDelete(id: number) {
+    removeFromData(id)
     try {
       await deleteAction(id)
-      loadData()
       refreshCounts()
     } catch (err) {
       console.error('Delete failed:', err)
+      loadData()
     }
   }
 
@@ -81,20 +92,18 @@ export default function PromisesView({ onShowFeed, onShowWeeklyReview, showWeekl
 
       if (!action) return
 
+      removeFromData(id)
       await updateAction(id, { dueDate: date, version: action.version })
-
-      // Create a trigger so it surfaces at the right time
       await createTrigger({
         actionId: id,
         type: 'DATE_EXACT',
         triggerDate: date,
         description: `Postponed to ${new Date(date).toLocaleDateString()}`
       })
-
-      loadData()
       refreshCounts()
     } catch (err) {
       console.error('Postpone failed:', err)
+      loadData()
     }
   }
 
